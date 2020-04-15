@@ -652,7 +652,7 @@ void GoWholePushDownExecutor::onStepOutResponse(RpcResponse &&rpcResp) {
             }
 
             for (auto i = 0u; i < record.size(); i++) {
-                SupportedType type;
+                SupportedType type(SupportedType::UNKNOWN);
                 switch (record[i].getType()) {
                     case nebula::graph::cpp2::ColumnValue::Type::id:
                     case nebula::graph::cpp2::ColumnValue::Type::integer:
