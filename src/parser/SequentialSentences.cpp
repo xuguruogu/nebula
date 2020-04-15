@@ -21,4 +21,13 @@ std::string SequentialSentences::toString() const {
     return buf;
 }
 
+void SequentialSentences::optimize(bool pushDown) {
+    for (auto& sentense : sentences_) {
+        auto s = sentense->optimize(pushDown);
+        if (s) {
+            sentense = std::move(s);
+        }
+    }
+}
+
 }   // namespace nebula

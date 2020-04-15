@@ -26,6 +26,7 @@ void ExecutionPlan::execute() {
         }
 
         sentences_ = std::move(result).value();
+        sentences_->optimize();
         executor_ = std::make_unique<SequentialExecutor>(sentences_.get(), ectx());
         status = executor_->prepare();
         if (!status.ok()) {

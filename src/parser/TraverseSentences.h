@@ -13,6 +13,8 @@
 
 namespace nebula {
 
+class OrderBySentence;
+class LimitSentence;
 
 class GoSentence final : public Sentence {
 public:
@@ -60,14 +62,22 @@ public:
         return yieldClause_.get();
     }
 
+    const OrderByClause* layerOrderByClause() const;
+
+    const LimitClause* layerLimitClause() const;
+
     std::string toString() const override;
 
+    void optimizeWith(std::unique_ptr<OrderBySentence> order_by_sentense, std::unique_ptr<LimitSentence> limit_sentense);
+    bool canWholePushDown();
 private:
     std::unique_ptr<StepClause>                 stepClause_;
     std::unique_ptr<FromClause>                 fromClause_;
     std::unique_ptr<OverClause>                 overClause_;
     std::unique_ptr<WhereClause>                whereClause_;
     std::unique_ptr<YieldClause>                yieldClause_;
+    std::unique_ptr<OrderBySentence>            orderBySentense_;
+    std::unique_ptr<LimitSentence>              limitSentense_;
 };
 
 
@@ -150,6 +160,8 @@ public:
 
     std::string toString() const override;
 
+    std::unique_ptr<Sentence> optimize(bool pushDown) override;
+
     auto left() {
         return left_.get();
     }
@@ -186,6 +198,8 @@ public:
         right_.reset(right);
     }
 
+    std::unique_ptr<Sentence> optimize(bool pushDown) override;
+
     Sentence* left() const {
         return left_.get();
     }
@@ -210,6 +224,8 @@ public:
         sentence_.reset(sentence);
     }
 
+    std::unique_ptr<Sentence> optimize(bool pushDown) override;
+
     const std::string* var() const {
         return variable_.get();
     }
@@ -225,68 +241,25 @@ private:
     std::unique_ptr<Sentence>                   sentence_;
 };
 
-class OrderFactor final {
-public:
-    enum OrderType : uint8_t {
-        ASCEND,
-        DESCEND
-    };
-
-    OrderFactor(Expression *expr, OrderType op) {
-        expr_.reset(expr);
-        orderType_ = op;
-    }
-
-    Expression* expr() {
-        return expr_.get();
-    }
-
-    OrderType orderType() {
-        return orderType_;
-    }
-
-    std::string toString() const;
-
-private:
-    std::unique_ptr<Expression>                 expr_;
-    OrderType                                   orderType_;
-};
-
-class OrderFactors final {
-public:
-    void addFactor(OrderFactor *factor) {
-        factors_.emplace_back(factor);
-    }
-
-    std::vector<OrderFactor*> factors() {
-        std::vector<OrderFactor*> result;
-        result.resize(factors_.size());
-        auto get = [] (auto &factor) { return factor.get(); };
-        std::transform(factors_.begin(), factors_.end(), result.begin(), get);
-        return result;
-    }
-
-    std::string toString() const;
-
-private:
-    std::vector<std::unique_ptr<OrderFactor>>   factors_;
-};
-
 class OrderBySentence final : public Sentence {
 public:
-    explicit OrderBySentence(OrderFactors *factors) {
-        orderFactors_.reset(factors);
+    explicit OrderBySentence(OrderByClause* orderByClause) {
+        orderByClause_.reset(orderByClause);
         kind_ = Kind::kOrderBy;
     }
 
+    OrderByClause* orderBy() {
+        return orderByClause_.get();
+    }
+
     std::vector<OrderFactor*> factors() {
-        return orderFactors_->factors();
+        return orderByClause_->factors();
     }
 
     std::string toString() const override;
 
 private:
-    std::unique_ptr<OrderFactors>               orderFactors_;
+    std::unique_ptr<OrderByClause>               orderByClause_;
 };
 
 class FetchVerticesSentence final : public Sentence {
@@ -563,23 +536,27 @@ private:
 
 class LimitSentence final : public Sentence {
 public:
-    explicit LimitSentence(int64_t offset, int64_t count) : offset_(offset), count_(count) {
+    explicit LimitSentence(LimitClause* limitClause) {
+        limitClause_.reset(limitClause);
         kind_ = Kind::kLimit;
+    }
+
+    LimitClause* limit() {
+        return limitClause_.get();
     }
 
     std::string toString() const override;
 
     int64_t offset() {
-        return offset_;
+        return limitClause_->offset();
     }
 
     int64_t count() {
-        return count_;
+        return limitClause_->count();
     }
 
- private:
-    int64_t    offset_{-1};
-    int64_t    count_{-1};
+private:
+    std::unique_ptr<LimitClause> limitClause_;
 };
 
 class YieldSentence final : public Sentence {

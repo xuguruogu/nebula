@@ -57,6 +57,8 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
     nebula::OverClause                     *over_clause;
     nebula::WhereClause                    *where_clause;
     nebula::WhenClause                     *when_clause;
+    nebula::OrderByClause                  *order_by_clause;
+    nebula::LimitClause                    *limit_clause;
     nebula::YieldClause                    *yield_clause;
     nebula::YieldColumns                   *yield_columns;
     nebula::YieldColumn                    *yield_column;
@@ -161,6 +163,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <over_clause> over_clause
 %type <where_clause> where_clause
 %type <when_clause> when_clause
+%type <limit_clause> limit_clause
 %type <yield_clause> yield_clause
 %type <yield_columns> yield_columns
 %type <yield_column> yield_column
@@ -184,6 +187,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <alter_schema_prop_item> alter_schema_prop_item
 %type <order_factor> order_factor
 %type <order_factors> order_factors
+%type <order_by_clause> order_by_clause
 %type <config_module> config_module_enum
 %type <config_row_item> show_config_item get_config_item set_config_item
 %type <edge_key> edge_key
@@ -730,6 +734,12 @@ when_clause
     | KW_WHEN expression { $$ = new WhenClause($2); }
     ;
 
+order_by_clause
+    : KW_ORDER KW_BY order_factors {
+        $$ = new OrderByClause($3);
+    }
+    ;
+
 yield_clause
     : %empty { $$ = nullptr; }
     | KW_YIELD yield_columns { $$ = new YieldClause($2); }
@@ -841,8 +851,8 @@ order_factors
     ;
 
 order_by_sentence
-    : KW_ORDER KW_BY order_factors {
-        $$ = new OrderBySentence($3);
+    : order_by_clause {
+        $$ = new OrderBySentence($1);
     }
     ;
 
@@ -954,19 +964,25 @@ to_clause
     ;
 
 limit_sentence
+    : limit_clause {
+        $$ = new LimitSentence($1);
+    }
+    ;
+
+limit_clause
     : KW_LIMIT INTEGER {
         ifOutOfRange($2, @2);
-        $$ = new LimitSentence(0, $2);
+        $$ = new LimitClause(0, $2);
     }
     | KW_LIMIT INTEGER COMMA INTEGER {
         ifOutOfRange($2, @2);
         ifOutOfRange($4, @2);
-        $$ = new LimitSentence($2, $4);
+        $$ = new LimitClause($2, $4);
     }
     | KW_LIMIT INTEGER KW_OFFSET INTEGER {
         ifOutOfRange($2, @2);
         ifOutOfRange($4, @4);
-        $$ = new LimitSentence($2, $4);
+        $$ = new LimitClause($2, $4);
     }
     ;
 

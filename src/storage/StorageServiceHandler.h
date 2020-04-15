@@ -58,6 +58,9 @@ public:
     folly::Future<cpp2::QueryResponse>
     future_getBound(const cpp2::GetNeighborsRequest& req) override;
 
+    folly::Future<cpp2::GetNeighborsWholePushDownResponse>
+    future_getBoundWholePushDown(const cpp2::GetNeighborsWholePushDownRequest& req) override;
+
     folly::Future<cpp2::QueryStatsResponse>
     future_boundStats(const cpp2::GetNeighborsRequest& req) override;
 

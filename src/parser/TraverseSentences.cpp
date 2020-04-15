@@ -32,8 +32,46 @@ std::string GoSentence::toString() const {
         buf += " ";
         buf += yieldClause_->toString();
     }
-
+    if (orderBySentense_ && limitSentense_) {
+        buf += " | ";
+        buf += orderBySentense_->toString();
+        buf += " | ";
+        buf += limitSentense_->toString();
+    }
     return buf;
+}
+
+
+const OrderByClause* GoSentence::layerOrderByClause() const {
+    return orderBySentense_->orderBy();
+}
+
+const LimitClause* GoSentence::layerLimitClause() const {
+    return limitSentense_->limit();
+}
+
+void GoSentence::optimizeWith(std::unique_ptr<OrderBySentence> order_by_sentense, std::unique_ptr<LimitSentence> limit_sentense) {
+    orderBySentense_ = std::move(order_by_sentense);
+    limitSentense_ = std::move(limit_sentense);
+    kind_ = Kind::kGoWholePushDown;
+}
+
+bool GoSentence::canWholePushDown() {
+    // where
+    if (whereClause_ && !whereClause_->filter()->canWholePushDown()) {
+        return false;
+    }
+
+    // yield
+    if (yieldClause_) {
+        for (auto col : yieldClause_->columns()) {
+            auto expr = col->expr();
+            if (!expr->canWholePushDown()) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 std::string MatchSentence::toString() const {
@@ -81,6 +119,81 @@ std::string SetSentence::toString() const {
     return buf;
 }
 
+std::unique_ptr<Sentence> SetSentence::optimize(bool pushDown) {
+    auto left = left_->optimize(pushDown);
+    auto right = right_->optimize(pushDown);
+    if (left) {
+        left_ = std::move(left);
+    }
+    if (right) {
+        right_ = std::move(right);
+    }
+    return nullptr;
+}
+
+std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
+    if (pushDown) {
+        // go ... | order by ... | limit ...
+        if (left()->kind() == Sentence::Kind::kPipe &&
+            right()->kind() == Sentence::Kind::kLimit &&
+            static_cast<PipedSentence*>(left())->left()->kind() == Sentence::Kind::kGo &&
+            static_cast<PipedSentence*>(left())->right()->kind() == Sentence::Kind::kOrderBy) {
+            auto p_go_sentense = static_cast<GoSentence*>(static_cast<PipedSentence*>(left())->left_.get());
+//        auto p_order_by_sentense = static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.get());
+//        auto p_limit_sentense = static_cast<LimitSentence*>(right_.get());
+
+            if (p_go_sentense->overClause()->direction() == OverClause::Direction::kForward &&
+                p_go_sentense->canWholePushDown() &&
+                (p_go_sentense->stepClause() == nullptr || p_go_sentense->stepClause()->steps() == 1)) {
+
+                std::unique_ptr<GoSentence> go_sentense(static_cast<GoSentence*>(static_cast<PipedSentence*>(left())->left_.release()));
+                std::unique_ptr<OrderBySentence> order_by_sentense(static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.release()));
+                std::unique_ptr<LimitSentence> limit_sentense(static_cast<LimitSentence*>(right_.release()));
+
+                go_sentense->optimizeWith(std::move(order_by_sentense), std::move(limit_sentense));
+                return std::move(go_sentense);
+            }
+        }
+
+        // ... | go ... | order by ... | limit ...
+        if (left()->kind() == Sentence::Kind::kPipe &&
+            right()->kind() == Sentence::Kind::kLimit &&
+            static_cast<PipedSentence*>(left())->left()->kind() == Sentence::Kind::kPipe &&
+            static_cast<PipedSentence*>(left())->right()->kind() == Sentence::Kind::kOrderBy &&
+            static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right()->kind() == Sentence::Kind::kGo) {
+            auto p_go_sentense = static_cast<GoSentence*>(static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right());
+//        auto p_order_by_sentense = static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.get());
+//        auto p_limit_sentense = static_cast<LimitSentence*>(right_.get());
+
+            if (p_go_sentense->overClause()->direction() == OverClause::Direction::kForward &&
+                p_go_sentense->canWholePushDown() &&
+                (p_go_sentense->stepClause() == nullptr || p_go_sentense->stepClause()->steps() == 1)) {
+                std::unique_ptr<OrderBySentence> order_by_sentense(static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.release()));
+                std::unique_ptr<LimitSentence> limit_sentense(static_cast<LimitSentence*>(right_.release()));
+
+                p_go_sentense->optimizeWith(std::move(order_by_sentense), std::move(limit_sentense));
+
+                return std::move(static_cast<PipedSentence*>(left())->left_);
+            }
+        }
+    }
+
+    // order by ... | limit ...
+
+    // ... | order by ... | limit ...
+
+    auto left = left_->optimize(pushDown);
+    auto right = right_->optimize(pushDown);
+    if (left) {
+        left_ = std::move(left);
+    }
+    if (right) {
+        right_ = std::move(right);
+    }
+
+    return nullptr;
+}
+
 std::string PipedSentence::toString() const {
     std::string buf;
     buf.reserve(256);
@@ -100,33 +213,16 @@ std::string AssignmentSentence::toString() const {
     return buf;
 }
 
-std::string OrderFactor::toString() const {
-    switch (orderType_) {
-        case ASCEND:
-            return folly::stringPrintf("%s ASC,", expr_->toString().c_str());
-        case DESCEND:
-            return folly::stringPrintf("%s DESC,", expr_->toString().c_str());
-        default:
-
-            LOG(FATAL) << "Unkown Order Type: " << orderType_;
-            return "";
+std::unique_ptr<Sentence> AssignmentSentence::optimize(bool pushDown) {
+    auto sentence = sentence_->optimize(pushDown);
+    if (sentence) {
+        sentence_ = std::move(sentence);
     }
-}
-
-std::string OrderFactors::toString() const {
-    std::string buf;
-    buf.reserve(256);
-    for (auto &factor : factors_) {
-        buf += factor->toString();
-    }
-    if (!buf.empty()) {
-        buf.resize(buf.size() - 1);
-    }
-    return buf;
+    return nullptr;
 }
 
 std::string OrderBySentence::toString() const {
-    return folly::stringPrintf("ORDER BY %s", orderFactors_->toString().c_str());
+    return orderByClause_->toString();
 }
 
 std::string FetchVerticesSentence::toString() const {
@@ -308,11 +404,7 @@ std::string FindPathSentence::toString() const {
 }
 
 std::string LimitSentence::toString() const {
-    if (offset_ == 0) {
-        return folly::stringPrintf("LIMIT %ld", count_);
-    }
-
-    return folly::stringPrintf("LIMIT %ld,%ld", offset_, count_);
+    return limitClause_->toString();
 }
 
 std::string YieldSentence::toString() const {

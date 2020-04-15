@@ -99,6 +99,7 @@ bool PermissionCheck::permissionCheck(session::Session *session, Sentence* sente
         case Sentence::Kind::kDescribeTagIndex :
         case Sentence::Kind::kDescribeEdgeIndex :
         case Sentence::Kind::kGo :
+        case Sentence::Kind::kGoWholePushDown :
         case Sentence::Kind::kSet :
         case Sentence::Kind::kPipe :
         case Sentence::Kind::kMatch :

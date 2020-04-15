@@ -178,6 +178,43 @@ std::string WhereClause::toString() const {
     return buf;
 }
 
+std::string OrderFactor::toString() const {
+  switch (orderType_) {
+    case ASCEND:
+      return folly::stringPrintf("%s ASC,", expr_->toString().c_str());
+    case DESCEND:
+      return folly::stringPrintf("%s DESC,", expr_->toString().c_str());
+    default:
+
+      LOG(FATAL) << "Unkown Order Type: " << orderType_;
+      return "";
+  }
+}
+
+std::string OrderFactors::toString() const {
+  std::string buf;
+  buf.reserve(256);
+  for (auto &factor : factors_) {
+    buf += factor->toString();
+  }
+  if (!buf.empty()) {
+    buf.resize(buf.size() - 1);
+  }
+  return buf;
+}
+
+std::string OrderByClause::toString() const {
+  return folly::stringPrintf("ORDER BY %s", orderFactors_->toString().c_str());
+}
+
+std::string LimitClause::toString() const {
+  if (offset_ == 0) {
+    return folly::stringPrintf("LIMIT %ld", count_);
+  }
+
+  return folly::stringPrintf("LIMIT %ld,%ld", offset_, count_);
+}
+
 std::string YieldColumn::toString() const {
     std::string buf;
     buf.reserve(256);

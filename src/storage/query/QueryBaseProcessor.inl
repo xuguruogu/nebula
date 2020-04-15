@@ -624,13 +624,6 @@ QueryBaseProcessor<REQ, RESP>::asyncProcessBucket(Bucket bucket) {
 }
 
 template<typename REQ, typename RESP>
-int32_t QueryBaseProcessor<REQ, RESP>::getBucketsNum(int32_t verticesNum,
-                                                     int32_t minVerticesPerBucket,
-                                                     int32_t handlerNum) {
-    return std::min(std::max(1, verticesNum/minVerticesPerBucket), handlerNum);
-}
-
-template<typename REQ, typename RESP>
 std::vector<Bucket> QueryBaseProcessor<REQ, RESP>::genBuckets(
                                                     const cpp2::GetNeighborsRequest& req) {
     std::vector<Bucket> buckets;
@@ -638,7 +631,7 @@ std::vector<Bucket> QueryBaseProcessor<REQ, RESP>::genBuckets(
     for (auto& pv : req.get_parts()) {
         verticesNum += pv.second.size();
     }
-    auto bucketsNum = getBucketsNum(verticesNum,
+    auto bucketsNum = detail::getBucketsNum(verticesNum,
                                     FLAGS_min_vertices_per_bucket,
                                     FLAGS_max_handlers_per_req);
     buckets.resize(bucketsNum);

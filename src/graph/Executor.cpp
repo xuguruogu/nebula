@@ -11,6 +11,7 @@
 #include "parser/MaintainSentences.h"
 #include "parser/AdminSentences.h"
 #include "graph/GoExecutor.h"
+#include "graph/GoWholePushDownExecutor.h"
 #include "graph/UseExecutor.h"
 #include "graph/PipeExecutor.h"
 #include "graph/CreateTagExecutor.h"
@@ -71,6 +72,9 @@ std::unique_ptr<Executor> Executor::makeExecutor(Sentence *sentence) {
     switch (kind) {
         case Sentence::Kind::kGo:
             executor = std::make_unique<GoExecutor>(sentence, ectx());
+            break;
+        case Sentence::Kind::kGoWholePushDown:
+            executor = std::make_unique<GoWholePushDownExecutor>(sentence, ectx());
             break;
         case Sentence::Kind::kUse:
             executor = std::make_unique<UseExecutor>(sentence, ectx());

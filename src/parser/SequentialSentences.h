@@ -40,6 +40,7 @@ public:
 
     std::string toString() const;
 
+    void optimize(bool pushDown = true);
 private:
     friend class nebula::graph::SequentialExecutor;
     std::vector<std::unique_ptr<Sentence>>      sentences_;

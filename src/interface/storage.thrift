@@ -9,6 +9,7 @@ namespace java com.vesoft.nebula.storage
 namespace go nebula.storage
 
 include "common.thrift"
+include "graph.thrift"
 
 enum ErrorCode {
     SUCCEEDED = 0,
@@ -41,6 +42,10 @@ enum ErrorCode {
     E_INVALID_PEER  = -34,
     E_RETRY_EXHAUSTED = -35,
     E_TRANSFER_LEADER_FAILED = -36,
+    E_INVALID_YIELD = -37,
+    E_INVALID_DST_PROP = -38,
+    E_DUPLICATE_COLUMNS = -39,
+    E_MISS_COLUMNS = -40,
 
     // meta client failed
     E_LOAD_META_FAILED = -41,
@@ -184,6 +189,39 @@ struct GetNeighborsRequest {
     3: list<common.EdgeType> edge_types,
     4: binary filter,
     5: list<PropDef> return_columns,
+}
+
+struct YieldColumn {
+    1: binary expr;
+    2: binary alias;
+    3: optional binary fun_name;
+}
+
+enum OrderByType {
+    ASCEND = 1,
+    DESCEND = 2,
+}
+
+struct OrderByFactor {
+    1: i64 idx;
+    2: OrderByType type;
+}
+
+struct GetNeighborsWholePushDownRequest {
+    1: common.GraphSpaceID space_id,
+    2: common.Schema       schema,
+    3: map<common.PartitionID, list<graph.RowValue>>(cpp.template = "std::unordered_map") parts,
+    4: i32 vid_index;
+    5: list<common.EdgeType> edge_types,
+    6: binary filter,
+    7: list<YieldColumn> yields,
+    8: list<OrderByFactor> order_by;
+    9: i32 layer_limit;
+}
+
+struct GetNeighborsWholePushDownResponse {
+    1: required ResponseCommon  result,
+    2: list<graph.RowValue>     rows;
 }
 
 struct VertexPropRequest {
@@ -466,6 +504,7 @@ struct LookUpIndexRequest {
 
 service StorageService {
     QueryResponse getBound(1: GetNeighborsRequest req)
+    GetNeighborsWholePushDownResponse getBoundWholePushDown(1: GetNeighborsWholePushDownRequest req)
 
     QueryStatsResponse boundStats(1: GetNeighborsRequest req)
 

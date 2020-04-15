@@ -138,6 +138,66 @@ folly::SemiFuture<StorageRpcResponse<cpp2::QueryResponse>> StorageClient::getNei
         });
 }
 
+folly::SemiFuture<StorageRpcResponse<storage::cpp2::GetNeighborsWholePushDownResponse>>
+StorageClient::getNeighborsWholePushDown(
+        GraphSpaceID space,
+        const nebula::cpp2::Schema &schema,
+        const std::vector<graph::cpp2::RowValue> &rows,
+        int vid_idx,
+        const std::vector<EdgeType> &edgeTypes,
+        const std::string &filter,
+        const std::vector<storage::cpp2::YieldColumn> &yields,
+        const std::vector<nebula::storage::cpp2::OrderByFactor> &order_by_factors,
+        int64_t layer_limit,
+        folly::EventBase* evb) {
+
+    auto status = clusterIdsToHosts(
+        space,
+        rows,
+        [vid_idx] (const graph::cpp2::RowValue& row) {
+            const nebula::graph::cpp2::ColumnValue& col = row.columns.at(vid_idx);
+            switch (col.getType()) {
+                case nebula::graph::cpp2::ColumnValue::Type::id:
+                    return col.get_id();
+                case nebula::graph::cpp2::ColumnValue::Type::integer:
+                    return col.get_integer();
+                default:
+                    throw std::runtime_error("getNeighborsWholePushDown not supported vid type.");
+            }
+        });
+
+    if (!status.ok()) {
+        return folly::makeFuture<StorageRpcResponse<cpp2::GetNeighborsWholePushDownResponse>>(
+            std::runtime_error(status.status().toString()));
+    }
+
+    auto& clusters = status.value();
+
+    std::unordered_map<HostAddr, cpp2::GetNeighborsWholePushDownRequest> requests;
+    for (auto& c : clusters) {
+        auto& host = c.first;
+        auto& req = requests[host];
+        req.set_space_id(space);
+        req.set_schema(schema);
+        req.set_parts(std::move(c.second));
+        req.set_vid_index(vid_idx);
+        req.set_edge_types(edgeTypes);
+        req.set_filter(filter);
+        req.set_yields(yields);
+        req.set_order_by(order_by_factors);
+        req.set_layer_limit(layer_limit);
+    }
+
+    return collectResponse(
+        evb, std::move(requests),
+        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsWholePushDownRequest& r) {
+            return client->future_getBoundWholePushDown(r); },
+        [](const std::pair<const PartitionID,
+            std::vector<graph::cpp2::RowValue>>& p) {
+            return p.first;
+        });
+}
+
 
 folly::SemiFuture<StorageRpcResponse<cpp2::QueryStatsResponse>> StorageClient::neighborStats(
         GraphSpaceID space,

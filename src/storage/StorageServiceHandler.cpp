@@ -7,6 +7,7 @@
 #include "storage/StorageServiceHandler.h"
 #include "base/Base.h"
 #include "storage/query/QueryBoundProcessor.h"
+#include "storage/query/QueryBoundWholePushDownProcessor.h"
 #include "storage/query/QueryVertexPropsProcessor.h"
 #include "storage/query/QueryEdgePropsProcessor.h"
 #include "storage/query/QueryStatsProcessor.h"
@@ -49,6 +50,16 @@ StorageServiceHandler::future_getBound(const cpp2::GetNeighborsRequest& req) {
                                                     &getBoundQpsStat_,
                                                     readerPool_.get(),
                                                     &vertexCache_);
+    RETURN_FUTURE(processor);
+}
+
+folly::Future<cpp2::GetNeighborsWholePushDownResponse>
+StorageServiceHandler::future_getBoundWholePushDown(const cpp2::GetNeighborsWholePushDownRequest& req) {
+    auto* processor = QueryBoundWholePushDownProcessor::instance(kvstore_,
+                                                                 schemaMan_,
+                                                                 &getBoundQpsStat_,
+                                                                 readerPool_.get(),
+                                                                 &vertexCache_);
     RETURN_FUTURE(processor);
 }
 

@@ -15,6 +15,7 @@ class Sentence {
 public:
     virtual ~Sentence() {}
     virtual std::string toString() const = 0;
+    virtual std::unique_ptr<Sentence> optimize(bool pushDown) { (void)pushDown; return nullptr; };
 
     enum class Kind : uint32_t {
         kUnknown,
@@ -72,6 +73,7 @@ public:
         kCreateSnapshot,
         kDropSnapshot,
         kAdmin,
+        kGoWholePushDown,
     };
 
     Kind kind() const {

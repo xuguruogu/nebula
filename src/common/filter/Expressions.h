@@ -384,6 +384,7 @@ public:
         return kind_;
     }
 
+    bool canWholePushDown();
 protected:
     static uint8_t kindToInt(Kind kind) {
         return static_cast<uint8_t>(kind);

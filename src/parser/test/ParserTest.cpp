@@ -1723,6 +1723,35 @@ TEST(Parser, Limit) {
     }
 }
 
+TEST(Parser, GoWithOrderByAndLimit) {
+    {
+        GQLParser parser;
+        std::string query = "GO FROM 1 OVER work | order by $-.a | LIMIT 1";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+        auto p = std::move(result).value();
+        p->optimize();
+        auto sentences = p->sentences();
+        ASSERT_EQ(1, sentences.size());
+        auto& sentence = sentences[0];
+        ASSERT_EQ(Sentence::Kind::kGoWholePushDown, sentence->kind());
+    }
+    {
+        GQLParser parser;
+        std::string query = "GO FROM 1 OVER work | GO FROM 1 OVER work | order by $-.a | LIMIT 1";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+        auto p = std::move(result).value();
+        p->optimize();
+        auto sentences = p->sentences();
+        ASSERT_EQ(1, sentences.size());
+        auto& sentence = sentences[0];
+        ASSERT_EQ(Sentence::Kind::kPipe, sentence->kind());
+        ASSERT_EQ(Sentence::Kind::kGo, static_cast<PipedSentence*>(sentence)->left()->kind());
+        ASSERT_EQ(Sentence::Kind::kGoWholePushDown, static_cast<PipedSentence*>(sentence)->right()->kind());
+    }
+}
+
 TEST(Parser, GroupBy) {
     // All fun succeed
     {

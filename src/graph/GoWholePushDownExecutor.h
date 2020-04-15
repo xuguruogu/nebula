@@ -4,15 +4,12 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-#ifndef GRAPH_GOEXECUTOR_H_
-#define GRAPH_GOEXECUTOR_H_
+#pragma once
 
 #include "base/Base.h"
 #include "graph/TraverseExecutor.h"
 #include "storage/client/StorageClient.h"
-
-DECLARE_bool(filter_pushdown);
-DECLARE_bool(trace_go);
+#include "GoExecutor.h"
 
 namespace nebula {
 
@@ -24,12 +21,12 @@ class QueryResponse;
 
 namespace graph {
 
-class GoExecutor final : public TraverseExecutor {
+class GoWholePushDownExecutor final : public TraverseExecutor {
 public:
-    GoExecutor(Sentence *sentence, ExecutionContext *ectx);
+    GoWholePushDownExecutor(Sentence *sentence, ExecutionContext *ectx);
 
     const char* name() const override {
-        return "GoExecutor";
+        return "GoWholePushDownExecutor";
     }
 
     Status MUST_USE_RESULT prepare() override;
@@ -60,24 +57,11 @@ private:
 
     Status prepareOverAll();
 
-    Status addToEdgeTypes(EdgeType type);
+    Status prepareOrderBy();
+
+    Status prepareLimit();
 
     Status checkNeededProps();
-
-    /**
-     * To check if this is the final step.
-     */
-    bool isFinalStep() const {
-        return curStep_ == steps_;
-    }
-
-    /**
-     * To check if `UPTO' is specified.
-     * If so, we are supposed to apply the filter in each step.
-     */
-    bool isUpto() const {
-        return upto_;
-    }
 
     /**
      * To obtain the source ids from various places,
@@ -90,7 +74,7 @@ private:
      */
     void stepOut();
 
-    using RpcResponse = storage::StorageRpcResponse<storage::cpp2::QueryResponse>;
+    using RpcResponse = storage::StorageRpcResponse<storage::cpp2::GetNeighborsWholePushDownResponse>;
     /**
      * Callback invoked upon the response of stepping out arrives.
      */
@@ -101,17 +85,7 @@ private:
      */
     void onEmptyInputs();
 
-    /**
-     * Callback invoked upon the response of retrieving terminal vertex arrives.
-     */
-    void onVertexProps(RpcResponse &&rpcResp);
-
-    StatusOr<std::vector<storage::cpp2::PropDef>> getStepOutProps();
-    StatusOr<std::vector<storage::cpp2::PropDef>> getDstProps();
-
     void fetchVertexProps(std::vector<VertexID> ids, RpcResponse &&rpcResp);
-
-    void maybeFinishExecution(RpcResponse &&rpcResp);
 
     /**
      * To retrieve or generate the column names for the execution result.
@@ -119,24 +93,15 @@ private:
     std::vector<std::string> getResultColumnNames() const;
 
     /**
-     * To retrieve the dst ids from a stepping out response.
-     */
-    StatusOr<std::vector<VertexID>> getDstIdsFromResp(RpcResponse &rpcResp) const;
-
-    /**
      * get the edgeName when over all edges
      */
     std::vector<std::string> getEdgeNames() const;
-    /**
-     * All required data have arrived, finish the execution.
-     */
-    void finishExecution(RpcResponse &&rpcResp);
 
     /**
      * To setup an intermediate representation of the execution result,
      * which is about to be piped to the next executor.
      */
-    bool setupInterimResult(RpcResponse &&rpcResp, std::unique_ptr<InterimResult> &result);
+    bool setupInterimResult(const std::vector<cpp2::RowValue>& rows, std::unique_ptr<InterimResult> &result);
 
     /**
      * To setup the header of the execution result, i.e. the column names.
@@ -157,8 +122,6 @@ private:
 
     bool processFinalResult(RpcResponse &rpcResp, Callback cb) const;
 
-    StatusOr<std::vector<cpp2::RowValue>> toThriftResponse(RpcResponse&& resp);
-
     /**
      * A container to hold the mapping from vertex id to its properties, used for lookups
      * during the final evaluation process.
@@ -176,27 +139,6 @@ private:
         std::unordered_map<VertexID, std::unordered_map<TagID, VData>> data_;
     };
 
-    class VertexBackTracker final {
-    public:
-        void add(VertexID src, VertexID dst) {
-            VertexID value = src;
-            auto iter = mapping_.find(src);
-            if (iter != mapping_.end()) {
-                value = iter->second;
-            }
-            mapping_[dst] = value;
-        }
-
-        VertexID get(VertexID id) {
-            auto iter = mapping_.find(id);
-            DCHECK(iter != mapping_.end());
-            return iter->second;
-        }
-
-    private:
-         std::unordered_map<VertexID, VertexID>     mapping_;
-    };
-
     OptVariantType getPropFromInterim(VertexID id, const std::string &prop) const;
 
     enum FromType {
@@ -206,33 +148,32 @@ private:
     };
 
 private:
-    GoSentence                                 *sentence_{nullptr};
-    FromType                                    fromType_{kInstantExpr};
-    uint32_t                                    steps_{1};
-    uint32_t                                    curStep_{1};
-    bool                                        upto_{false};
-    OverClause::Direction                       direction_{OverClause::Direction::kForward};
-    std::vector<EdgeType>                       edgeTypes_;
-    std::string                                *varname_{nullptr};
-    std::string                                *colname_{nullptr};
-    std::unique_ptr<WhereWrapper>               whereWrapper_;
-    std::vector<YieldColumn*>                   yields_;
-    std::unique_ptr<YieldClauseWrapper>         yieldClauseWrapper_;
-    bool                                        distinct_{false};
-    bool                                        distinctPushDown_{false};
-    using InterimIndex = InterimResult::InterimResultIndex;
-    std::unique_ptr<InterimIndex>               index_;
-    std::unique_ptr<ExpressionContext>          expCtx_;
-    std::vector<VertexID>                       starts_;
-    std::unique_ptr<VertexHolder>               vertexHolder_;
-    std::unique_ptr<VertexBackTracker>          backTracker_;
-    std::unique_ptr<cpp2::ExecutionResponse>    resp_;
-    // The name of Tag or Edge, index of prop in data
-    using SchemaPropIndex = std::unordered_map<std::pair<std::string, std::string>, int64_t>;
+  GoSentence                                 *sentence_{nullptr};
+  FromType                                    fromType_{kInstantExpr};
+  std::vector<EdgeType>                       edgeTypes_;
+  std::string                                *varname_{nullptr};
+  std::string                                *colname_{nullptr};
+  std::unique_ptr<WhereWholePushDownWrapper>  whereWrapper_;
+  std::vector<YieldColumn*>                   yields_;
+  std::unique_ptr<YieldClauseWrapper>         yieldClauseWrapper_;
+  bool                                        distinct_{false};
+  bool                                        distinctPushDown_{false};
+  using InterimIndex = InterimResult::InterimResultIndex;
+  std::unique_ptr<InterimIndex>               index_;
+  std::unique_ptr<ExpressionContext>          expCtx_;
+  std::vector<VertexID>                       starts_;
+  std::unique_ptr<VertexHolder>               vertexHolder_;
+  std::unique_ptr<cpp2::ExecutionResponse>    resp_;
+  const InterimResult*                        p_inputs_{nullptr};
+  // The name of Tag or Edge, index of prop in data
+  using SchemaPropIndex = std::unordered_map<std::pair<std::string, std::string>, int64_t>;
+//  std::vector<std::pair<std::string, OrderFactor::OrderType>> layerOrderBySortFactors_;
+  std::vector<nebula::storage::cpp2::OrderByFactor>           layerOrderBySortFactors_;
+  int64_t                                                     layerLimitCount_{-1};
+  int64_t                                                     layerLimitOffset_{-1};
+  int64_t                                                     layerLimitCountPushDown_{-1};
 };
 
 }   // namespace graph
 }   // namespace nebula
 
-
-#endif  // GRAPH_GOEXECUTOR_H_

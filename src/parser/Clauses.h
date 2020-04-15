@@ -45,6 +45,8 @@ protected:
         kToClause,
         kWhereClause,
         kYieldClause,
+        kOrderClause,
+        kLimitClause,
 
         kMax,
     };
@@ -292,6 +294,91 @@ private:
 };
 
 using WhenClause = WhereClause;
+
+class OrderFactor final {
+public:
+  enum OrderType : uint8_t {
+    ASCEND,
+    DESCEND
+  };
+
+  OrderFactor(Expression *expr, OrderType op) {
+    expr_.reset(expr);
+    orderType_ = op;
+  }
+
+  Expression* expr() {
+    return expr_.get();
+  }
+
+  OrderType orderType() {
+    return orderType_;
+  }
+
+  std::string toString() const;
+
+private:
+  std::unique_ptr<Expression>                 expr_;
+  OrderType                                   orderType_;
+};
+
+class OrderFactors final {
+public:
+  void addFactor(OrderFactor *factor) {
+    factors_.emplace_back(factor);
+  }
+
+  std::vector<OrderFactor*> factors() {
+    std::vector<OrderFactor*> result;
+    result.resize(factors_.size());
+    auto get = [] (auto &factor) { return factor.get(); };
+    std::transform(factors_.begin(), factors_.end(), result.begin(), get);
+    return result;
+  }
+
+  std::string toString() const;
+
+private:
+  std::vector<std::unique_ptr<OrderFactor>>   factors_;
+};
+
+class OrderByClause final : public Clause {
+public:
+  explicit OrderByClause(OrderFactors *factors) {
+    orderFactors_.reset(factors);
+    kind_ = kOrderClause;
+  }
+
+  std::vector<OrderFactor*> factors() const {
+    return orderFactors_->factors();
+  }
+
+  std::string toString() const;
+
+private:
+  std::unique_ptr<OrderFactors>               orderFactors_;
+};
+
+class LimitClause final : public Clause {
+public:
+  explicit LimitClause(int64_t offset, int64_t count) : offset_(offset), count_(count) {
+    kind_ = kLimitClause;
+  }
+
+  int64_t offset() const {
+    return offset_;
+  }
+
+  int64_t count() const {
+    return count_;
+  }
+
+  std::string toString() const;
+
+private:
+  int64_t    offset_{-1};
+  int64_t    count_{-1};
+};
 
 class YieldColumn final {
 public:

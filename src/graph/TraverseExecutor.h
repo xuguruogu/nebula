@@ -78,6 +78,10 @@ public:
                    const VariableHolder *varHolder,
                    std::vector<YieldColumn*> &yields);
 
+    Status prepare(const InterimResult *inputs,
+                   const VariableHolder *varHolder,
+                   std::vector<storage::cpp2::YieldColumn> &yields);
+
 private:
     bool needAllPropsFromInput(const YieldColumn *col,
                                const InterimResult *inputs,
@@ -123,6 +127,33 @@ private:
     friend class GoTest_FilterPushdown_Test;
     const WhereClause              *where_{nullptr};
     std::unique_ptr<Expression>     filterRewrite_;
+    Expression                     *filter_{nullptr};
+    std::string                     filterPushdown_;
+};
+
+class WhereWholePushDownWrapper final {
+public:
+    explicit WhereWholePushDownWrapper(const WhereClause *where) : where_(where) {
+        if (where != nullptr) {
+            filter_ = where->filter();
+        }
+    }
+
+    Status prepare(ExpressionContext *ectx);
+
+    Expression* getFilter() {
+        return filter_;
+    }
+
+    std::string getFilterPushdown() {
+        return filterPushdown_;
+    }
+private:
+    friend class TraverseExecutor;
+    friend class GoWithLimitExecutor;
+    friend class GoWholePushDownExecutor;
+    friend class GoTest_FilterPushdown_Test;
+    const WhereClause              *where_{nullptr};
     Expression                     *filter_{nullptr};
     std::string                     filterPushdown_;
 };

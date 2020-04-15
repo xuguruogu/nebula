@@ -10,6 +10,7 @@
 #include "dataman/RowReader.h"
 #include "dataman/RowWriter.h"
 #include "graph/GoExecutor.h"
+#include "graph/GoWholePushDownExecutor.h"
 #include "graph/PipeExecutor.h"
 #include "graph/OrderByExecutor.h"
 #include "graph/FetchVerticesExecutor.h"
@@ -41,6 +42,9 @@ TraverseExecutor::makeTraverseExecutor(Sentence *sentence, ExecutionContext *ect
     switch (kind) {
         case Sentence::Kind::kGo:
             executor = std::make_unique<GoExecutor>(sentence, ectx);
+            break;
+        case Sentence::Kind::kGoWholePushDown:
+            executor = std::make_unique<GoWholePushDownExecutor>(sentence, ectx);
             break;
         case Sentence::Kind::kPipe:
             executor = std::make_unique<PipeExecutor>(sentence, ectx);
@@ -353,6 +357,28 @@ Status YieldClauseWrapper::prepare(
     return Status::OK();
 }
 
+Status YieldClauseWrapper::prepare(
+    const InterimResult *inputs,
+    const VariableHolder *varHolder,
+    std::vector<storage::cpp2::YieldColumn> &yields) {
+
+    std::vector<YieldColumn*> yields_vec;
+    Status status = prepare(inputs, varHolder, yields_vec);
+    if (!status.ok()) {
+        return status;
+    }
+
+    for (auto yield : yields_vec) {
+        storage::cpp2::YieldColumn item;
+        item.set_alias(*yield->alias());
+        item.set_fun_name(yield->getFunName());
+        item.set_expr(Expression::encode(yield->expr()));
+        yields.push_back(std::move(item));
+    }
+
+    return Status::OK();
+}
+
 bool YieldClauseWrapper::needAllPropsFromInput(const YieldColumn *col,
                                                const InterimResult *inputs,
                                                std::vector<YieldColumn*> &yields) {
@@ -516,5 +542,29 @@ bool WhereWrapper::canPushdown(Expression *expr) const {
     }
     return true;
 }
+
+Status WhereWholePushDownWrapper::prepare(ExpressionContext *ectx) {
+    // we has make sure pushdown can be done.
+    Status status = Status::OK();
+    if (where_ == nullptr) {
+        return status;
+    }
+
+    filter_ = where_->filter();
+    if (filter_ != nullptr) {
+        filter_->setContext(ectx);
+        status = filter_->prepare();
+        if (!status.ok()) {
+            return status;
+        }
+        if (!filter_->canWholePushDown()) {
+            return Status::Error("WhereWholePushDownWrapper must can whole pushdown.");
+        }
+    }
+
+    filterPushdown_ = Expression::encode(where_->filter());
+    return status;
+}
+
 }   // namespace graph
 }   // namespace nebula

@@ -70,6 +70,7 @@ nebula_add_executable(
         $<TARGET_OBJECTS:time_obj>
         $<TARGET_OBJECTS:meta_thrift_obj>
         $<TARGET_OBJECTS:common_thrift_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:thrift_obj>
         $<TARGET_OBJECTS:meta_gflags_man_obj>
         $<TARGET_OBJECTS:gflags_man_obj>
@@ -111,6 +112,7 @@ nebula_add_executable(
         $<TARGET_OBJECTS:stats_obj>
         $<TARGET_OBJECTS:time_obj>
         $<TARGET_OBJECTS:meta_thrift_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:raftex_obj>
         $<TARGET_OBJECTS:raftex_thrift_obj>
         $<TARGET_OBJECTS:common_thrift_obj>

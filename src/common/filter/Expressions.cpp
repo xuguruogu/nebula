@@ -97,6 +97,51 @@ std::string Expression::encode(Expression *expr) noexcept {
 }
 
 
+bool Expression::canWholePushDown() {
+  switch (kind_) {
+    case Expression::kLogical: {
+      auto *logExpr = static_cast<LogicalExpression*>(this);
+      auto leftCanWholePushdown = const_cast<Expression*>(logExpr->left())->canWholePushDown();
+      auto rightCanWholePushdown = const_cast<Expression*>(logExpr->right())->canWholePushDown();
+      return leftCanWholePushdown && rightCanWholePushdown;
+    }
+    case Expression::kUnary:
+    case Expression::kTypeCasting:
+    case Expression::kArithmetic:
+    case Expression::kRelational:
+    case Expression::kFunctionCall: {
+        auto ectx = std::make_unique<ExpressionContext>();
+        setContext(ectx.get());
+        auto status = prepare();
+        if (!status.ok()) {
+            LOG(ERROR) << "Prepare failed: " << status.toString();
+            return false;
+        }
+        return ectx->hasDstTagProp();
+    }
+    case Expression::kPrimary:
+    case Expression::kSourceProp:
+    case Expression::kEdgeRank:
+    case Expression::kEdgeDstId:
+    case Expression::kEdgeSrcId:
+    case Expression::kEdgeType:
+    case Expression::kAliasProp:
+    case Expression::kInputProp:
+    case Expression::kVariableProp: {
+      return true;
+    }
+    case Expression::kMax:
+    case Expression::kDestProp:
+    case Expression::kUUID: {
+      return false;
+    }
+    default: {
+      LOG(ERROR) << "Unkown expression: " << kind_;
+      return false;
+    }
+  }
+}
+
 // static
 StatusOr<std::unique_ptr<Expression>>
 Expression::decode(folly::StringPiece buffer) noexcept {

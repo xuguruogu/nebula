@@ -125,6 +125,19 @@ public:
         std::vector<storage::cpp2::PropDef> returnCols,
         folly::EventBase* evb = nullptr);
 
+    folly::SemiFuture<StorageRpcResponse<storage::cpp2::GetNeighborsWholePushDownResponse>>
+    getNeighborsWholePushDown(
+        GraphSpaceID space,
+        const nebula::cpp2::Schema &schema,
+        const std::vector<graph::cpp2::RowValue> &rows,
+        int vid_idx,
+        const std::vector<EdgeType> &edgeTypes,
+        const std::string &filter,
+        const std::vector<storage::cpp2::YieldColumn> &yields,
+        const std::vector<nebula::storage::cpp2::OrderByFactor> &order_by_factors,
+        int64_t layer_limit,
+        folly::EventBase* evb = nullptr);
+
     folly::SemiFuture<StorageRpcResponse<storage::cpp2::QueryStatsResponse>> neighborStats(
         GraphSpaceID space,
         std::vector<VertexID> vertices,

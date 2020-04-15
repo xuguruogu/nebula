@@ -19,6 +19,12 @@
 namespace nebula {
 namespace storage {
 
+namespace detail {
+inline int32_t getBucketsNum(int32_t verticesNum, int32_t minVerticesPerBucket, int32_t handlerNum) {
+    return std::min(std::max(1, verticesNum/minVerticesPerBucket), handlerNum);
+}
+}
+
 const std::unordered_map<std::string, PropContext::PropInKeyType> kPropsInKey_ = {
     {"_src", PropContext::PropInKeyType::SRC},
     {"_dst", PropContext::PropInKeyType::DST},
@@ -111,8 +117,6 @@ protected:
     std::vector<Bucket> genBuckets(const cpp2::GetNeighborsRequest& req);
 
     folly::Future<std::vector<OneVertexResp>> asyncProcessBucket(Bucket bucket);
-
-    int32_t getBucketsNum(int32_t verticesNum, int32_t minVerticesPerBucket, int32_t handlerNum);
 
     bool checkExp(const Expression* exp);
 
