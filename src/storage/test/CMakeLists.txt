@@ -4,6 +4,7 @@ set(storage_test_deps
     $<TARGET_OBJECTS:filter_obj>
     $<TARGET_OBJECTS:storage_client>
     $<TARGET_OBJECTS:storage_thrift_obj>
+    $<TARGET_OBJECTS:graph_thrift_obj>
     $<TARGET_OBJECTS:kvstore_obj>
     $<TARGET_OBJECTS:meta_client>
     $<TARGET_OBJECTS:time_obj>
