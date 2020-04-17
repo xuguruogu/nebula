@@ -32,6 +32,7 @@ nebula_add_test(
     OBJECTS
         $<TARGET_OBJECTS:meta_thrift_obj>
         $<TARGET_OBJECTS:common_thrift_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:thrift_obj>
         $<TARGET_OBJECTS:base_obj>
         $<TARGET_OBJECTS:fs_obj>
@@ -49,6 +50,7 @@ nebula_add_test(
         ProcessorTest.cpp
     OBJECTS
         $<TARGET_OBJECTS:index_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         ${meta_test_deps}
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
@@ -64,6 +66,7 @@ nebula_add_test(
         HBProcessorTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
@@ -78,6 +81,7 @@ nebula_add_test(
         MetaClientTest.cpp
     OBJECTS
         $<TARGET_OBJECTS:meta_gflags_man_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         ${meta_test_deps}
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
@@ -116,6 +120,7 @@ nebula_add_test(
         ActiveHostsManTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
@@ -175,6 +180,7 @@ nebula_add_test(
         BalancerTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
@@ -193,6 +199,7 @@ nebula_add_test(
         $<TARGET_OBJECTS:storage_service_handler>
         $<TARGET_OBJECTS:storage_client>
         $<TARGET_OBJECTS:dataman_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:filter_obj>
         $<TARGET_OBJECTS:adHocSchema_obj>
@@ -213,6 +220,7 @@ nebula_add_test(
         AdminClientTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
