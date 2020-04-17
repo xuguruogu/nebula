@@ -403,6 +403,7 @@ nebula_add_test(
     OBJECTS
         ${GRAPH_TEST_CLIENT_LIBS}
         ${GRAPH_TEST_LIBS}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${THRIFT_LIBRARIES}
         ${ROCKSDB_LIBRARIES}
