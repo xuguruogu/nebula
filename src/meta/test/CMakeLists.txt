@@ -95,6 +95,7 @@ nebula_add_test(
         $<TARGET_OBJECTS:storage_client>
         $<TARGET_OBJECTS:meta_gflags_man_obj>
         $<TARGET_OBJECTS:storage_service_handler>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:adHocSchema_obj>
         $<TARGET_OBJECTS:adHocIndex_obj>
         $<TARGET_OBJECTS:dataman_obj>
@@ -130,6 +131,7 @@ nebula_add_test(
     OBJECTS
         $<TARGET_OBJECTS:storage_http_handler>
         $<TARGET_OBJECTS:meta_http_handler>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:ws_obj>
         $<TARGET_OBJECTS:ws_common_obj>
         $<TARGET_OBJECTS:hdfs_helper_obj>
@@ -152,6 +154,7 @@ nebula_add_test(
     OBJECTS
         $<TARGET_OBJECTS:storage_http_handler>
         $<TARGET_OBJECTS:meta_http_handler>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:ws_obj>
         $<TARGET_OBJECTS:ws_common_obj>
         $<TARGET_OBJECTS:hdfs_helper_obj>
@@ -190,6 +193,7 @@ nebula_add_test(
         $<TARGET_OBJECTS:storage_service_handler>
         $<TARGET_OBJECTS:storage_client>
         $<TARGET_OBJECTS:dataman_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:filter_obj>
         $<TARGET_OBJECTS:adHocSchema_obj>
         $<TARGET_OBJECTS:adHocIndex_obj>
@@ -224,6 +228,7 @@ nebula_add_test(
         AuthProcessorTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
@@ -238,6 +243,7 @@ nebula_add_test(
         ClusterIdManTest.cpp
     OBJECTS
         ${meta_test_deps}
+        $<TARGET_OBJECTS:graph_thrift_obj>
     LIBRARIES
         ${ROCKSDB_LIBRARIES}
         ${THRIFT_LIBRARIES}
@@ -253,6 +259,7 @@ nebula_add_test(
     OBJECTS
         $<TARGET_OBJECTS:storage_http_handler>
         $<TARGET_OBJECTS:meta_http_handler>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:ws_obj>
         $<TARGET_OBJECTS:ws_common_obj>
         $<TARGET_OBJECTS:hdfs_helper_obj>
@@ -274,6 +281,7 @@ nebula_add_test(
         JobManagerTest.cpp
     OBJECTS
         $<TARGET_OBJECTS:meta_http_handler>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:ws_obj>
         $<TARGET_OBJECTS:ws_common_obj>
         $<TARGET_OBJECTS:http_client_obj>
