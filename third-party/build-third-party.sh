@@ -141,7 +141,7 @@ make |& \
         { grep --line-buffered 'Creating\|^Scanning\|Performing\|Completed\|CMakeFiles.*Error' || true; }
 end_time=$(date +%s)
 
-cd $OLDPWD && rm -rf $build_dir
+cd $OLDPWD ## && rm -rf $build_dir
 
 # Remove all libtool files
 find $install_dir -name '*.la' | xargs rm -f

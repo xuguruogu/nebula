@@ -98,7 +98,8 @@ StatusOr<std::vector<storage::cpp2::Edge>> InsertEdgeExecutor::prepareEdges() {
     auto space = ectx()->rctx()->session()->space();
     expCtx_->setSpace(space);
 
-    std::vector<storage::cpp2::Edge> edges(rows_.size() * 2);   // inbound and outbound
+//    std::vector<storage::cpp2::Edge> edges(rows_.size() * 2);   // inbound and outbound
+    std::vector<storage::cpp2::Edge> edges(rows_.size());   // outbound
     auto index = 0;
     Getters getters;
     for (auto i = 0u; i < rows_.size(); i++) {
@@ -219,16 +220,16 @@ StatusOr<std::vector<storage::cpp2::Edge>> InsertEdgeExecutor::prepareEdges() {
             out.__isset.key = true;
             out.__isset.props = true;
         }
-        {
-            auto &in = edges[index++];
-            in.key.set_src(dst);
-            in.key.set_dst(src);
-            in.key.set_ranking(rank);
-            in.key.set_edge_type(-edgeType_);
-            in.props = std::move(props);
-            in.__isset.key = true;
-            in.__isset.props = true;
-        }
+//        {
+//            auto &in = edges[index++];
+//            in.key.set_src(dst);
+//            in.key.set_dst(src);
+//            in.key.set_ranking(rank);
+//            in.key.set_edge_type(-edgeType_);
+//            in.props = std::move(props);
+//            in.__isset.key = true;
+//            in.__isset.props = true;
+//        }
     }
 
     return edges;

@@ -28,6 +28,9 @@ cmake_minimum_required(VERSION 3.5.0)
 # Set the project name
 project("Nebula Graph" C CXX)
 
+set(CMAKE_COLOR_MAKEFILE ON)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 # Set the project home dir
 set(NEBULA_HOME ${CMAKE_CURRENT_SOURCE_DIR})
 
