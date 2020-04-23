@@ -59,39 +59,47 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
 
     std::unordered_map<std::string, std::string> dbOptsMap;
     if (!loadOptionsMap(dbOptsMap, FLAGS_rocksdb_db_options)) {
+      LOG(ERROR) << ".....";
         return rocksdb::Status::InvalidArgument();
     }
     s = GetDBOptionsFromMap(rocksdb::DBOptions(), dbOptsMap, &dbOpts, true);
     if (!s.ok()) {
+      LOG(ERROR) << ".....";
         return s;
     }
     dbOpts.listeners.emplace_back(new EventListener());
-
-    std::unordered_map<std::string, std::string> cfOptsMap;
-    if (!loadOptionsMap(cfOptsMap, FLAGS_rocksdb_column_family_options)) {
-        return rocksdb::Status::InvalidArgument();
-    }
-    s = GetColumnFamilyOptionsFromMap(rocksdb::ColumnFamilyOptions(), cfOptsMap, &cfOpts, true);
-    if (!s.ok()) {
-        return s;
-    }
+//
+//    std::unordered_map<std::string, std::string> cfOptsMap;
+//    if (!loadOptionsMap(cfOptsMap, FLAGS_rocksdb_column_family_options)) {
+//      LOG(ERROR) << ".....";
+//        return rocksdb::Status::InvalidArgument();
+//    }
+//    s = GetColumnFamilyOptionsFromMap(rocksdb::ColumnFamilyOptions(), cfOptsMap, &cfOpts, true);
+//    if (!s.ok()) {
+//      LOG(ERROR) << ".....";
+//        return s;
+//    }
 
     baseOpts = rocksdb::Options(dbOpts, cfOpts);
 
     std::unordered_map<std::string, std::string> bbtOptsMap;
     if (!loadOptionsMap(bbtOptsMap, FLAGS_rocksdb_block_based_table_options)) {
+      LOG(ERROR) << ".....";
         return rocksdb::Status::InvalidArgument();
     }
     s = GetBlockBasedTableOptionsFromMap(rocksdb::BlockBasedTableOptions(), bbtOptsMap,
                                          &bbtOpts, true);
     if (!s.ok()) {
+      LOG(ERROR) << ".....";
         return s;
     }
 
     static std::shared_ptr<rocksdb::Cache> blockCache
         = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024);
     bbtOpts.block_cache = blockCache;
-    bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+    bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, true));
+    bbtOpts.whole_key_filtering = false;
+
     if (FLAGS_enable_partitioned_index_filter) {
         bbtOpts.index_type = rocksdb::BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
         bbtOpts.partition_filters = true;
@@ -101,7 +109,13 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
             baseOpts.compaction_style == rocksdb::CompactionStyle::kCompactionStyleLevel;
     }
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
+    baseOpts.IncreaseParallelism();
+    baseOpts.OptimizeLevelStyleCompaction();
+    baseOpts.memtable_factory.reset(rocksdb::NewHashLinkListRepFactory(1000000));
+    baseOpts.allow_concurrent_memtable_write = false;
+    baseOpts.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(12));
     baseOpts.create_if_missing = true;
+
     return s;
 }
 
