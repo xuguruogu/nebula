@@ -99,6 +99,16 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     bbtOpts.block_cache = blockCache;
     bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, true));
     bbtOpts.whole_key_filtering = false;
+    baseOpts.compression_per_level = std::vector<rocksdb::CompressionType>{
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kSnappyCompression,
+        rocksdb::CompressionType::kSnappyCompression,
+        rocksdb::CompressionType::kSnappyCompression,
+        rocksdb::CompressionType::kSnappyCompression,
+    };
 
     if (FLAGS_enable_partitioned_index_filter) {
         bbtOpts.index_type = rocksdb::BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
@@ -111,8 +121,6 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
     baseOpts.IncreaseParallelism();
     baseOpts.OptimizeLevelStyleCompaction();
-    baseOpts.memtable_factory.reset(rocksdb::NewHashLinkListRepFactory(1000000));
-    baseOpts.allow_concurrent_memtable_write = false;
     baseOpts.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(12));
     baseOpts.create_if_missing = true;
 
