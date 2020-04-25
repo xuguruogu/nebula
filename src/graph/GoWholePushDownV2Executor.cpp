@@ -196,7 +196,7 @@ void GoWholePushDownV2Executor::addStart(VertexID vid) {
     graph::cpp2::RowValue row;
     cpp2::ColumnValue col;
     col.set_id(vid);
-    row.set_columns(col);
+    row.set_columns({col});
     starts_.emplace_back(row);
 }
 
@@ -435,7 +435,9 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
         }
         s.set_yields(std::move(yields));
         s.set_distinct(distinct_);
-        sentencesPushDown_.emplace_back(std::move(s));
+        nebula::storage::cpp2::Sentence ss;
+        ss.set_go_sentence(std::move(s));
+        sentencesPushDown_.emplace_back(std::move(ss));
     }
 
     for (auto& sentence : sentences) {
@@ -474,7 +476,9 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
                     );
                     s.order_by.emplace_back(std::move(f));
                 }
-                sentencesPushDown_.emplace_back(s);
+                nebula::storage::cpp2::Sentence ss;
+                ss.set_order_by_sentence(std::move(s));
+                sentencesPushDown_.emplace_back(ss);
             }
                 break;
             case Sentence::Kind::kLimit:
@@ -491,7 +495,9 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
                 storage::cpp2::LimitSentence s;
                 s.set_offset(offset);
                 s.set_count(count);
-                sentencesPushDown_.emplace_back(s);
+                nebula::storage::cpp2::Sentence ss;
+                ss.set_limit_sentence(std::move(s));
+                sentencesPushDown_.emplace_back(ss);
             }
                 break;
             case Sentence::Kind::KGroupBy:
@@ -563,7 +569,9 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
                     }
                 }
                 result_columns_ = std::move(new_columns);
-                sentencesPushDown_.emplace_back(std::move(s));
+                nebula::storage::cpp2::Sentence ss;
+                ss.set_group_by_sentence(std::move(s));
+                sentencesPushDown_.emplace_back(std::move(ss));
             }
                 break;
             case Sentence::Kind::kYield:
@@ -649,11 +657,13 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
                     }
                 }
                 result_columns_ = std::move(new_columns);
-                sentencesPushDown_.emplace_back(std::move(s));
+                nebula::storage::cpp2::Sentence ss;
+                ss.set_yield_sentence(std::move(s));
+                sentencesPushDown_.emplace_back(std::move(ss));
             }
                 break;
             default:
-                return Status::Error("type %d can not pushdown.", sentence->kind());
+                return Status::Error("type %d can not pushdown.", static_cast<int>(sentence->kind()));
         }
     }
     return Status::OK();
@@ -662,8 +672,9 @@ Status GoWholePushDownV2Executor::prepareSubSentences() {
 Status GoWholePushDownV2Executor::setupStarts() {
     // Literal vertex ids
     if (!starts_.empty()) {
-        scheme_ = std::make_shared<SchemaWriter>();
-        scheme_->appendCol("id", cpp2::SupportedType::VID);
+        auto schemaWriter = std::make_shared<SchemaWriter>();
+        schemaWriter->appendCol("id", SupportedType::VID);
+        scheme_ = std::move(schemaWriter);
         vid_idx_ = 0;
         return Status::OK();
     }
@@ -769,59 +780,6 @@ void GoWholePushDownV2Executor::onStepOutResponse(RpcResponse &&rpcResp) {
         return;
     }
 
-    // layer sort && limit
-    if (!layerOrderBySortFactors_.empty()) {
-        auto comparator = [this] (cpp2::RowValue& lhs, cpp2::RowValue& rhs) {
-            const auto &lhsColumns = lhs.get_columns();
-            const auto &rhsColumns = rhs.get_columns();
-            for (auto &factor : layerOrderBySortFactors_) {
-                auto fieldIndex = factor.get_idx();
-                auto orderType = factor.get_type();
-                if (fieldIndex < 0 ||
-                    fieldIndex >= static_cast<int64_t>(lhsColumns.size()) ||
-                    fieldIndex >= static_cast<int64_t>(rhsColumns.size())) {
-                    continue;
-                }
-
-                if (lhsColumns[fieldIndex] == rhsColumns[fieldIndex]) {
-                    continue;
-                }
-                if (orderType == ::nebula::storage::cpp2::OrderByType::ASCEND) {
-                    return lhsColumns[fieldIndex] < rhsColumns[fieldIndex];
-                } else if (orderType == ::nebula::storage::cpp2::OrderByType::DESCEND) {
-                    return lhsColumns[fieldIndex] > rhsColumns[fieldIndex];
-                }
-            }
-            return false;
-        };
-
-        if (layerLimitOffset_) {
-            if (rows.size() <= static_cast<uint64_t>(layerLimitOffset_)) {
-                rows.clear();
-            } else if (rows.size() <= static_cast<uint64_t>(layerLimitOffset_ + layerLimitCount_)) {
-                std::nth_element(rows.begin(), rows.begin() + layerLimitOffset_, rows.end(), comparator);
-                std::copy(std::make_move_iterator(rows.begin() + layerLimitOffset_),
-                          std::make_move_iterator(rows.end()),
-                          std::make_move_iterator(rows.begin()));
-                rows.resize(rows.size() - layerLimitOffset_);
-            } else {
-                std::nth_element(rows.begin(), rows.begin() + layerLimitOffset_, rows.end(), comparator);
-                std::nth_element(rows.begin() + layerLimitOffset_, rows.begin() + layerLimitOffset_ + layerLimitCount_, rows.end(), comparator);
-                std::copy(std::make_move_iterator(rows.begin() + layerLimitOffset_),
-                          std::make_move_iterator(rows.begin() + layerLimitOffset_ + layerLimitCount_),
-                          std::make_move_iterator(rows.begin()));
-                rows.resize(layerLimitCount_);
-            }
-        } else {
-            if (layerLimitCount_ > 0 && rows.size() > static_cast<uint64_t>(layerLimitCount_)) {
-                std::nth_element(rows.begin(), rows.begin() + layerLimitCount_, rows.end(), comparator);
-                rows.resize(layerLimitCount_);
-            }
-        }
-
-        std::sort(rows.begin(), rows.end(), comparator);
-    }
-
     if (rows.empty()) {
         onEmptyInputs();
         return;
@@ -865,7 +823,8 @@ void GoWholePushDownV2Executor::onStepOutResponse(RpcResponse &&rpcResp) {
             }
         }
 
-        auto result = std::make_unique<InterimResult>(result_columns_);
+        auto cols = result_columns_;
+        auto result = std::make_unique<InterimResult>(std::move(cols));
         auto rsWriter = std::make_unique<RowSetWriter>(schema);
         for (auto& row : rows) {
             RowWriter writer(schema);
@@ -907,7 +866,8 @@ void GoWholePushDownV2Executor::onStepOutResponse(RpcResponse &&rpcResp) {
 }
 
 void GoWholePushDownV2Executor::onEmptyInputs() {
-    auto outputs = std::make_unique<InterimResult>(result_columns_);
+    auto cols = result_columns_;
+    auto outputs = std::make_unique<InterimResult>(std::move(cols));
     if (onResult_) {
         onResult_(std::move(outputs));
     } else if (resp_ == nullptr) {

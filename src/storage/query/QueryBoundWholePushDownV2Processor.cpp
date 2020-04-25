@@ -292,6 +292,13 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
             rows.insert(rows.end(), std::make_move_iterator(list.begin()), std::make_move_iterator(list.end()));
         }
     }
+    std::vector<std::string> columns_names;
+    {
+        columns_names.reserve(yields_.size());
+        for (auto& yield : yields_) {
+            columns_names.emplace_back(yield.alias);
+        }
+    }
 
     // sub_sentences
     for (unsigned i = 1; i < sub_sentences_.size(); i++) {
@@ -354,6 +361,12 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
                         yields_columns_expr.emplace_back(Expression::decode(yield.get_expr()).value());
                     }
                 }
+                std::unordered_map<std::string, unsigned > schemaMap;
+                {
+                    for (unsigned idx = 0; idx < columns_names.size(); idx++) {
+                        schemaMap[columns_names[idx]] = idx;
+                    }
+                }
 
                 using FunCols = std::vector<std::shared_ptr<graph::AggFun>>;
                 // key : the column values of group by, val: function table of aggregated columns
@@ -366,28 +379,18 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
                     FunCols calVals;
                     // Firstly: group the cols
                     for (unsigned g_idx = 0; g_idx < group_columns.size(); g_idx++) {
-                        cpp2::ColumnValue::Type valType = cpp2::ColumnValue::Type::__EMPTY__;
+                        // auto& col = group_columns[g_idx];
+                        auto& col_expr = group_columns_expr[g_idx];
                         getters.getInputProp = [&] (const std::string & prop) -> OptVariantType {
-                            auto indexIt = schemaMap_.find(prop);
-                            if (indexIt == schemaMap_.end()) {
+                            auto indexIt = schemaMap.find(prop);
+                            if (indexIt == schemaMap.end()) {
                                 LOG(ERROR) << prop <<  " is nonexistent";
                                 return Status::Error("%s is nonexistent", prop.c_str());
                             }
                             auto val = it.columns[indexIt->second];
-                            valType = val.getType();
                             return toVariantType(val);
                         };
-
-                        auto eval = col->expr()->eval(getters);
-                        if (!eval.ok()) {
-                            return eval.status();
-                        }
-
-                        auto cVal = toColumnValue(eval.value(), valType);
-                        if (!cVal.ok()) {
-                            return cVal.status();
-                        }
-                        groupVals.vec.emplace_back(std::move(cVal).value());
+                        groupVals.vec.emplace_back(toColumnValue(col_expr->eval(getters).value()));
                     }
 
                     auto findIt = data.find(groupVals);
@@ -396,8 +399,10 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
 
                     // Get all aggregation function
                     if (findIt == data.end()) {
-                        for (auto &col : yieldCols_) {
-                            auto funPtr = funVec[col->getFunName()]();
+                        for (unsigned y_idx = 0; y_idx < yields_columns.size(); y_idx++) {
+                            auto& yield = yields_columns[y_idx];
+                            // auto& yield_expr = yields_columns_expr[y_idx];
+                            auto funPtr = graph::funVec[yield.get_fun_name()]();
                             calVals.emplace_back(std::move(funPtr));
                         }
                     } else {
@@ -405,30 +410,20 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
                     }
 
                     // Apply value
-                    auto i = 0u;
-                    for (auto &col : calVals) {
-                        cpp2::ColumnValue::Type valType = cpp2::ColumnValue::Type::__EMPTY__;
+                    for (unsigned y_idx = 0; y_idx < yields_columns.size(); y_idx++) {
+                        // auto& yield = yields_columns[y_idx];
+                        auto& yield_expr = yields_columns_expr[y_idx];
                         getters.getInputProp = [&] (const std::string &prop) -> OptVariantType{
-                            auto indexIt = schemaMap_.find(prop);
-                            if (indexIt == schemaMap_.end()) {
+                            auto indexIt = schemaMap.find(prop);
+                            if (indexIt == schemaMap.end()) {
                                 LOG(ERROR) << prop <<  " is nonexistent";
                                 return Status::Error("%s is nonexistent", prop.c_str());
                             }
                             auto val = it.columns[indexIt->second];
-                            valType = val.getType();
                             return toVariantType(val);
                         };
-                        auto eval = yieldCols_[i]->expr()->eval(getters);
-                        if (!eval.ok()) {
-                            return eval.status();
-                        }
-
-                        auto cVal = toColumnValue(std::move(eval).value(), valType);
-                        if (!cVal.ok()) {
-                            return cVal.status();
-                        }
-                        col->apply(cVal.value());
-                        i++;
+                        auto v = toColumnValue(yield_expr->eval(getters).value());
+                        calVals[y_idx]->apply(v);
                     }
 
                     if (findIt == data.end()) {
@@ -437,20 +432,114 @@ void QueryBoundWholePushDownV2Processor::onProcessFinished() {
                 }
 
                 // Generate result data
-                rows_.clear();
+                rows.clear();
+                rows.reserve(data.size());
                 for (auto& item : data) {
-                    std::vector<cpp2::ColumnValue> row;
+                    std::vector<graph::cpp2::ColumnValue> row;
                     for (auto& col : item.second) {
                         row.emplace_back(col->getResult());
                     }
-                    rows_.emplace_back();
-                    rows_.back().set_columns(std::move(row));
+                    rows.emplace_back();
+                    rows.back().set_columns(std::move(row));
+                }
+                columns_names.clear();
+                columns_names.reserve(yields_columns.size());
+                for (auto& yield : yields_columns) {
+                    columns_names.emplace_back(yield.get_alias());
                 }
             }
                 break;
             case cpp2::Sentence::Type::yield_sentence:
             {
+                auto& yield_sentence = sentence.get_yield_sentence();
+                std::unique_ptr<Expression> filter;
+                if (!yield_sentence.get_where().empty())
+                    filter = Expression::decode(yield_sentence.get_where()).value();
+                auto& yields_columns = yield_sentence.get_yields();
+                std::vector<std::unique_ptr<Expression>> yields_columns_expr;
 
+                bool hasAggFun = false;
+                std::vector<std::shared_ptr<graph::AggFun>> aggFuns;
+                {
+                    yields_columns_expr.reserve(yields_columns.size());
+                    for (auto& yield : yields_columns) {
+                        yields_columns_expr.push_back(Expression::decode(yield.get_expr()).value());
+                        if (!yield.get_fun_name().empty()) {
+                            hasAggFun = true;
+                            aggFuns.emplace_back(graph::funVec[yield.get_fun_name()]());
+                        }
+                    }
+                }
+                if (hasAggFun && aggFuns.size() != yields_columns.size()) {
+                    LOG(ERROR) << "agg funcs size not match yields columns size.";
+                    throw std::logic_error("agg funcs size not match yields columns size.");
+                }
+                std::unordered_map<std::string, unsigned > schemaMap;
+                {
+                    for (unsigned idx = 0; idx < columns_names.size(); idx++) {
+                        schemaMap[columns_names[idx]] = idx;
+                    }
+                }
+
+                Getters getters;
+                std::vector<nebula::graph::cpp2::RowValue> new_rows;
+                {
+                    if (!hasAggFun) {
+                        new_rows.reserve(rows.size());
+                    }
+                }
+
+                for (auto& row : rows) {
+                    getters.getInputProp = [&] (const std::string & prop) -> OptVariantType {
+                        auto indexIt = schemaMap.find(prop);
+                        if (indexIt == schemaMap.end()) {
+                            LOG(ERROR) << prop <<  " is nonexistent";
+                            return Status::Error("%s is nonexistent", prop.c_str());
+                        }
+                        auto val = row.columns[indexIt->second];
+                        return toVariantType(val);
+                    };
+
+                    if (filter && !Expression::asBool(filter->eval(getters).value()))
+                        continue;
+
+                    if (hasAggFun) {
+                        for (unsigned y_idx = 0; y_idx < yields_columns.size(); y_idx++) {
+                            auto& col_expr = yields_columns_expr[y_idx];
+                            auto v = toColumnValue(col_expr->eval(getters).value());
+                            aggFuns[y_idx]->apply(v);
+                        }
+                    } else {
+                        std::vector<graph::cpp2::ColumnValue> new_row;
+                        new_row.reserve(yields_columns.size());
+                        for (unsigned y_idx = 0; y_idx < yields_columns.size(); y_idx++) {
+                            auto& col_expr = yields_columns_expr[y_idx];
+                            auto v = toColumnValue(col_expr->eval(getters).value());
+                            new_row.emplace_back(v);
+                        }
+                        graph::cpp2::RowValue r;
+                        r.set_columns(std::move(new_row));
+                        new_rows.emplace_back(std::move(r));
+                    }
+                }
+
+                if (hasAggFun) {
+                    std::vector<graph::cpp2::ColumnValue> new_row;
+                    for (auto& agg : aggFuns) {
+                        new_row.emplace_back(agg->getResult());
+                    }
+                    graph::cpp2::RowValue r;
+                    r.set_columns(std::move(new_row));
+                    new_rows.emplace_back(std::move(r));
+                }
+
+                rows = std::move(new_rows);
+
+                columns_names.clear();
+                columns_names.reserve(yields_columns.size());
+                for (auto& yield : yields_columns) {
+                    columns_names.emplace_back(yield.get_alias());
+                }
             }
                 break;
             default:

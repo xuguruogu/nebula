@@ -12,6 +12,7 @@
 #include "parser/AdminSentences.h"
 #include "graph/GoExecutor.h"
 #include "graph/GoWholePushDownExecutor.h"
+#include "graph/GoWholePushDownV2Executor.h"
 #include "graph/UseExecutor.h"
 #include "graph/PipeExecutor.h"
 #include "graph/CreateTagExecutor.h"
