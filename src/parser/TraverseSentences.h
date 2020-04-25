@@ -227,6 +227,22 @@ public:
     std::unique_ptr<Sentence>                   right_;
 };
 
+class PushdownSentence final : public Sentence {
+public:
+    PushdownSentence(Sentence *sentence) {
+        kind_ = Kind::kPushDown;
+        sentence_.reset(sentence);
+    }
+
+    Sentence* sentence() const {
+        return sentence_.get();
+    }
+
+    std::string toString() const override;
+
+public:
+    std::unique_ptr<Sentence>                   sentence_;
+};
 
 class AssignmentSentence final : public Sentence {
 public:

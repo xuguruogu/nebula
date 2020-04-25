@@ -24,6 +24,7 @@ static constexpr size_t MAX_STRING = 4096;
 %x COMMENT
 
 GO                          ([Gg][Oo])
+PUSHDOWN                    ([Pp][Uu][Ss][Hh][Dd][Oo][Ww][Nn])
 AS                          ([Aa][Ss])
 TO                          ([Tt][Oo])
 OR                          ([Oo][Rr])
@@ -171,6 +172,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 
  /* Reserved keyword */
 {GO}                        { return TokenType::KW_GO; }
+{PUSHDOWN}                  { return TokenType::KW_PUSHDOWN; }
 {AS}                        { return TokenType::KW_AS; }
 {TO}                        { return TokenType::KW_TO; }
 {OR}                        { return TokenType::KW_OR; }

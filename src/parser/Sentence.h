@@ -75,6 +75,7 @@ public:
         kAdmin,
         kGoWholePushDown,
         kGoWholePushDownV2,
+        kPushDown,
     };
 
     Kind kind() const {

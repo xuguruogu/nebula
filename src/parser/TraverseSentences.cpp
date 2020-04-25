@@ -325,6 +325,15 @@ std::string PipedSentence::toString() const {
     return buf;
 }
 
+std::string PushdownSentence::toString() const {
+    std::string buf;
+    buf.reserve(256);
+    buf += " pushdown( ";
+    buf += sentence_->toString();
+    buf += ") ";
+    return buf;
+}
+
 std::string AssignmentSentence::toString() const {
     std::string buf;
     buf.reserve(256);

@@ -102,7 +102,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %destructor { delete $$; } <*>
 
 /* keywords */
-%token KW_GO KW_AS KW_TO KW_OR KW_AND KW_XOR KW_USE KW_SET KW_FROM KW_WHERE KW_ALTER
+%token KW_GO KW_PUSHDOWN KW_AS KW_TO KW_OR KW_AND KW_XOR KW_USE KW_SET KW_FROM KW_WHERE KW_ALTER
 %token KW_MATCH KW_INSERT KW_VALUES KW_YIELD KW_RETURN KW_CREATE KW_VERTEX KW_OFFLINE
 %token KW_EDGE KW_EDGES KW_STEPS KW_OVER KW_UPTO KW_REVERSELY KW_SPACE KW_DELETE KW_FIND KW_REBUILD
 %token KW_INT KW_DOUBLE KW_STRING KW_BOOL KW_TAG KW_TAGS KW_UNION KW_INTERSECT KW_MINUS
@@ -232,7 +232,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <sentence> download_sentence ingest_sentence
 
 %type <sentence> traverse_sentence
-%type <sentence> go_sentence match_sentence lookup_sentence find_path_sentence
+%type <sentence> go_sentence pushdown_sentence match_sentence lookup_sentence find_path_sentence
 %type <sentence> group_by_sentence order_by_sentence limit_sentence
 %type <sentence> fetch_sentence fetch_vertices_sentence fetch_edges_sentence
 %type <sentence> set_sentence piped_sentence assignment_sentence
@@ -1273,6 +1273,7 @@ rebuild_edge_index_sentence
 
 traverse_sentence
     : L_PAREN set_sentence R_PAREN { $$ = $2; }
+    | pushdown_sentence { $$ = $1; }
     | go_sentence { $$ = $1; }
     | match_sentence { $$ = $1; }
     | lookup_sentence { $$ = $1; }
@@ -1282,6 +1283,10 @@ traverse_sentence
     | find_path_sentence { $$ = $1; }
     | limit_sentence { $$ = $1; }
     | yield_sentence { $$ = $1; }
+    ;
+
+pushdown_sentence
+    : KW_REBUILD L_PAREN piped_sentence R_PAREN { $$ = new PushdownSentence($3); }
     ;
 
 piped_sentence
