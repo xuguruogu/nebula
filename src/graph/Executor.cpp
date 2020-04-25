@@ -76,6 +76,9 @@ std::unique_ptr<Executor> Executor::makeExecutor(Sentence *sentence) {
         case Sentence::Kind::kGoWholePushDown:
             executor = std::make_unique<GoWholePushDownExecutor>(sentence, ectx());
             break;
+        case Sentence::Kind::kGoWholePushDownV2:
+            executor = std::make_unique<GoWholePushDownV2Executor>(sentence, ectx());
+            break;
         case Sentence::Kind::kUse:
             executor = std::make_unique<UseExecutor>(sentence, ectx());
             break;

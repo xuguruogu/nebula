@@ -14,6 +14,7 @@ nebula_add_library(
     UseExecutor.cpp
     GoExecutor.cpp
     GoWholePushDownExecutor.cpp
+    GoWholePushDownV2Executor.cpp
     PipeExecutor.cpp
     CreateEdgeExecutor.cpp
     AlterEdgeExecutor.cpp

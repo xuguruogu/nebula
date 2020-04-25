@@ -46,6 +46,7 @@ enum ErrorCode {
     E_INVALID_DST_PROP = -38,
     E_DUPLICATE_COLUMNS = -39,
     E_MISS_COLUMNS = -40,
+    E_INVALID_SENTENCE = -42,
 
     // meta client failed
     E_LOAD_META_FAILED = -41,
@@ -194,7 +195,7 @@ struct GetNeighborsRequest {
 struct YieldColumn {
     1: binary expr;
     2: binary alias;
-    3: optional binary fun_name;
+    3: binary fun_name;
 }
 
 enum OrderByType {
@@ -217,6 +218,48 @@ struct GetNeighborsWholePushDownRequest {
     7: list<YieldColumn> yields,
     8: list<OrderByFactor> order_by;
     9: i32 layer_limit;
+}
+
+struct GroupBySentence {
+    1: list<YieldColumn> group,
+    2: list<YieldColumn> yields,
+}
+
+struct OrderBySentence {
+    1: list<OrderByFactor> order_by,
+}
+
+struct YieldSentence {
+    1: list<YieldColumn> yields,
+    2: binary where,
+}
+
+struct LimitSentence {
+    1: i32 offset,
+    2: i32 count,
+}
+
+struct GoSentence {
+    1: list<common.EdgeType> edge_types,
+    2: binary where,
+    3: list<YieldColumn> yields,
+    4: bool distinct,
+}
+
+union Sentence {
+    1: GoSentence go_sentence,
+    2: GroupBySentence group_by_sentence;
+    3: OrderBySentence order_by_sentence;
+    4: YieldSentence yield_sentence;
+    5: LimitSentence limit_sentence;
+}
+
+struct GetNeighborsWholePushDownV2Request {
+    1: common.GraphSpaceID space_id,
+    2: common.Schema schema,
+    3: map<common.PartitionID, list<graph.RowValue>>(cpp.template = "std::unordered_map") parts,
+    4: i32 vid_index,
+    5: list<Sentence> sentences,
 }
 
 struct GetNeighborsWholePushDownResponse {
@@ -505,6 +548,7 @@ struct LookUpIndexRequest {
 service StorageService {
     QueryResponse getBound(1: GetNeighborsRequest req)
     GetNeighborsWholePushDownResponse getBoundWholePushDown(1: GetNeighborsWholePushDownRequest req)
+    GetNeighborsWholePushDownResponse getBoundWholePushDownV2(1: GetNeighborsWholePushDownV2Request req)
 
     QueryStatsResponse boundStats(1: GetNeighborsRequest req)
 

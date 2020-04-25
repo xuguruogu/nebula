@@ -32,11 +32,18 @@ std::string GoSentence::toString() const {
         buf += " ";
         buf += yieldClause_->toString();
     }
-    if (orderBySentense_ && limitSentense_) {
-        buf += " | ";
-        buf += orderBySentense_->toString();
-        buf += " | ";
-        buf += limitSentense_->toString();
+    if (sentenses_.empty()) {
+        if (orderBySentense_ && limitSentense_) {
+            buf += " | ";
+            buf += orderBySentense_->toString();
+            buf += " | ";
+            buf += limitSentense_->toString();
+        }
+    } else {
+        for (auto& s : sentenses_) {
+            buf += " | ";
+            buf += s->toString();
+        }
     }
     return buf;
 }
@@ -56,7 +63,12 @@ void GoSentence::optimizeWith(std::unique_ptr<OrderBySentence> order_by_sentense
     kind_ = Kind::kGoWholePushDown;
 }
 
-bool GoSentence::canWholePushDown() {
+void GoSentence::optimizeWith(std::vector<std::unique_ptr<Sentence>> sentenses) {
+    sentenses_ = std::move(sentenses);
+    kind_ = Kind::kGoWholePushDownV2;
+}
+
+bool GoSentence::canWholePushDown() const {
     // where
     if (whereClause_ && !whereClause_->filter()->canWholePushDown()) {
         return false;
@@ -131,6 +143,105 @@ std::unique_ptr<Sentence> SetSentence::optimize(bool pushDown) {
     return nullptr;
 }
 
+static bool __contains_go(PipedSentence* piped_sentence) {
+    if (piped_sentence->left()->kind() == Sentence::Kind::kGo ||
+        piped_sentence->right()->kind() == Sentence::Kind::kGo) {
+        return true;
+    }
+
+    if (piped_sentence->left()->kind() == Sentence::Kind::kPipe) {
+        return __contains_go(static_cast<PipedSentence*>(piped_sentence->left()));
+    }
+
+    return false;
+}
+
+static bool __is_start_with_go(PipedSentence* piped_sentence) {
+    if (piped_sentence->right()->kind() == Sentence::Kind::kGo) {
+        return false;
+    }
+    if (piped_sentence->left()->kind() == Sentence::Kind::kGo) {
+        return true;
+    }
+    if (piped_sentence->left()->kind() == Sentence::Kind::kPipe) {
+        return __is_start_with_go(static_cast<PipedSentence*>(piped_sentence->left()));
+    }
+
+    return false;
+}
+
+
+static std::unique_ptr<Sentence> __optimize_start_with_go(
+    PipedSentence* piped_sentence, std::vector<std::unique_ptr<Sentence>>&& sentences) {
+    CHECK(__is_start_with_go(piped_sentence)) << "should be start with go.";
+    sentences.insert(sentences.begin(), std::move(piped_sentence->right_));
+    if (piped_sentence->left()->kind() == Sentence::Kind::kGo) {
+        static_cast<GoSentence*>(piped_sentence->left())->optimizeWith(std::move(sentences));
+        return std::move(piped_sentence->left_);
+    }
+
+    CHECK(piped_sentence->left()->kind() == Sentence::Kind::kPipe) << "should be pipe sentence.";
+    return __optimize_start_with_go(static_cast<PipedSentence*>(piped_sentence->left()), std::move(sentences));
+}
+
+static std::unique_ptr<Sentence> __optimize_pipe_with_go(
+    PipedSentence* piped_sentence, std::vector<std::unique_ptr<Sentence>>&& sentences) {
+    CHECK(!__is_start_with_go(piped_sentence)) << "should be pipe with go.";
+    CHECK(piped_sentence->right()->kind() != Sentence::Kind::kGo) << "";
+    sentences.insert(sentences.begin(), std::move(piped_sentence->right_));
+    CHECK(piped_sentence->left()->kind() == Sentence::Kind::kPipe) << "should be pipe sentence.";
+    auto left = static_cast<PipedSentence*>(piped_sentence->left());
+    if (left->right()->kind() == Sentence::Kind::kGo) {
+        static_cast<GoSentence*>(left->right())->optimizeWith(std::move(sentences));
+        return std::move(piped_sentence->left_);
+    }
+
+    return __optimize_pipe_with_go(left, std::move(sentences));
+}
+
+static std::unique_ptr<Sentence> __optimize_go(PipedSentence* piped_sentence) {
+    CHECK(__contains_go(piped_sentence)) << "";
+    std::vector<std::unique_ptr<Sentence>> sentences;
+    if (__is_start_with_go(piped_sentence)) {
+        return __optimize_start_with_go(piped_sentence, std::move(sentences));
+    } else {
+        return __optimize_pipe_with_go(piped_sentence, std::move(sentences));
+    }
+}
+
+static const GoSentence* __locate_optimize_go(Sentence* sentence) {
+    switch (sentence->kind()) {
+        case Sentence::Kind::kGo:
+            return static_cast<const GoSentence*>(sentence);
+        case Sentence::Kind::kPipe:
+            break;
+        default:
+            return nullptr;
+    }
+
+  auto piped_sentence = static_cast<const PipedSentence*>(sentence);
+    switch (piped_sentence->right()->kind()) {
+        case Sentence::Kind::kGo:
+            return static_cast<const GoSentence*>(piped_sentence->right());
+        case Sentence::Kind::KGroupBy:
+        case Sentence::Kind::kOrderBy:
+        case Sentence::Kind::kYield:
+            break;
+        default:
+            return nullptr;
+    }
+
+    switch (piped_sentence->left()->kind()) {
+        case Sentence::Kind::kGo:
+            return static_cast<const GoSentence*>(piped_sentence->left());
+        case Sentence::Kind::kPipe:
+            return __locate_optimize_go(static_cast<PipedSentence*>(piped_sentence->left()));
+        default:
+            return nullptr;
+    }
+}
+
+
 std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
     if (pushDown) {
 //        // go ... | order by ... | limit ...
@@ -155,25 +266,36 @@ std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
 //            }
 //        }
 
-        // ... | go ... | order by ... | limit ...
-        if (left()->kind() == Sentence::Kind::kPipe &&
-            right()->kind() == Sentence::Kind::kLimit &&
-            static_cast<PipedSentence*>(left())->left()->kind() == Sentence::Kind::kPipe &&
-            static_cast<PipedSentence*>(left())->right()->kind() == Sentence::Kind::kOrderBy &&
-            static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right()->kind() == Sentence::Kind::kGo) {
-            auto p_go_sentense = static_cast<GoSentence*>(static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right());
-//        auto p_order_by_sentense = static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.get());
-//        auto p_limit_sentense = static_cast<LimitSentence*>(right_.get());
+//        // ... | go ... | order by ... | limit ...
+//        if (left()->kind() == Sentence::Kind::kPipe &&
+//            right()->kind() == Sentence::Kind::kLimit &&
+//            static_cast<PipedSentence*>(left())->left()->kind() == Sentence::Kind::kPipe &&
+//            static_cast<PipedSentence*>(left())->right()->kind() == Sentence::Kind::kOrderBy &&
+//            static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right()->kind() == Sentence::Kind::kGo) {
+//            auto p_go_sentense = static_cast<GoSentence*>(static_cast<PipedSentence*>(static_cast<PipedSentence*>(left())->left())->right());
+////        auto p_order_by_sentense = static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.get());
+////        auto p_limit_sentense = static_cast<LimitSentence*>(right_.get());
+//
+//            if (p_go_sentense->overClause()->direction() == OverClause::Direction::kForward &&
+//                p_go_sentense->canWholePushDown() &&
+//                (p_go_sentense->stepClause() == nullptr || p_go_sentense->stepClause()->steps() == 1)) {
+//                std::unique_ptr<OrderBySentence> order_by_sentense(static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.release()));
+//                std::unique_ptr<LimitSentence> limit_sentense(static_cast<LimitSentence*>(right_.release()));
+//                p_go_sentense->optimizeWith(std::move(order_by_sentense), std::move(limit_sentense));
+//                return std::move(static_cast<PipedSentence*>(left())->left_);
+//            }
+//        }
 
-            if (p_go_sentense->overClause()->direction() == OverClause::Direction::kForward &&
-                p_go_sentense->canWholePushDown() &&
-                (p_go_sentense->stepClause() == nullptr || p_go_sentense->stepClause()->steps() == 1)) {
-                std::unique_ptr<OrderBySentence> order_by_sentense(static_cast<OrderBySentence*>(static_cast<PipedSentence*>(left())->right_.release()));
-                std::unique_ptr<LimitSentence> limit_sentense(static_cast<LimitSentence*>(right_.release()));
-
-                p_go_sentense->optimizeWith(std::move(order_by_sentense), std::move(limit_sentense));
-
-                return std::move(static_cast<PipedSentence*>(left())->left_);
+        // [... | ] go ... [ | order by | yield | group by ] | limit ...
+        {
+            if (right()->kind() == Sentence::Kind::kLimit) {
+                auto p_go_sentense = __locate_optimize_go(left());
+                if (p_go_sentense &&
+                    p_go_sentense->overClause()->direction() == OverClause::Direction::kForward &&
+                    p_go_sentense->canWholePushDown() &&
+                    (p_go_sentense->stepClause() == nullptr || p_go_sentense->stepClause()->steps() == 1)) {
+                    return __optimize_go(this);
+                }
             }
         }
     }

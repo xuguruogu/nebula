@@ -4,62 +4,13 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-#include "storage/query/QueryBoundWholePushDownProcessor.h"
 #include <algorithm>
 #include "time/Duration.h"
 #include "dataman/RowReader.h"
 #include "dataman/RowWriter.h"
-
-namespace nebula {
-namespace graph {
-namespace cpp2 {
-
-bool ColumnValue::operator<(const ColumnValue& rhs) const {
-    DCHECK_EQ(type_, rhs.type_);
-    auto& lhs = *this;
-    switch (lhs.type_) {
-        case Type::bool_val: {
-            return lhs.value_.bool_val < rhs.value_.bool_val;
-        }
-        case Type::integer: {
-            return lhs.value_.integer < rhs.value_.integer;
-        }
-        case Type::id: {
-            return lhs.value_.id < rhs.value_.id;
-        }
-        case Type::single_precision: {
-            return lhs.value_.single_precision < rhs.value_.single_precision;
-        }
-        case Type::double_precision: {
-            return lhs.value_.double_precision < rhs.value_.double_precision;
-        }
-        case Type::str: {
-            return lhs.value_.str < rhs.value_.str;
-        }
-        case Type::timestamp: {
-            return lhs.value_.timestamp < rhs.value_.timestamp;
-        }
-        case Type::year: {
-            return lhs.value_.year < rhs.value_.year;
-        }
-        case Type::month: {
-            return lhs.value_.month < rhs.value_.month;
-        }
-        case Type::date: {
-            return lhs.value_.date < rhs.value_.date;
-        }
-        case Type::datetime: {
-            return lhs.value_.datetime < rhs.value_.datetime;
-        }
-        default: {
-            return false;
-        }
-    }
-    return false;
-}
-}   // namespace cpp2
-}
-}
+#include "graph/AggregateFunction.h"
+#include "parser/Clauses.h"
+#include "storage/query/QueryBoundWholePushDownV2Processor.h"
 
 namespace nebula {
 namespace storage {
@@ -108,7 +59,7 @@ static nebula::graph::cpp2::ColumnValue toColumnValue(const VariantType& value) 
     return r;
 }
 
-kvstore::ResultCode QueryBoundWholePushDownProcessor::processVertex(PartitionID partId, VertexID vId, IndexID idx) {
+kvstore::ResultCode QueryBoundWholePushDownV2Processor::processVertex(PartitionID partId, VertexID vId, IndexID idx) {
     // input row
     nebula::graph::cpp2::RowValue& input_row = inputs_[partId].at(idx);
 
@@ -318,75 +269,218 @@ kvstore::ResultCode QueryBoundWholePushDownProcessor::processVertex(PartitionID 
             }
 
             row.set_columns(std::move(resultRow));
-            result_[partId][idx].push_back(std::move(row));
+            go_result_[partId][idx].push_back(std::move(row));
         }
     }
 
     return kvstore::ResultCode::SUCCEEDED;
 }
 
-void QueryBoundWholePushDownProcessor::onProcessFinished(int32_t retNum) {
-    (void)retNum;
-
+void QueryBoundWholePushDownV2Processor::onProcessFinished() {
     // collcet
     uint64_t num = 0;
     std::vector<nebula::graph::cpp2::RowValue> rows;
-    for (auto& part : result_) {
+    for (auto& part : go_result_) {
         for (auto& list : part.second) {
             num += list.size();
         }
     }
+
     rows.reserve(num);
-    for (auto& part : result_) {
+    for (auto& part : go_result_) {
         for (auto& list : part.second) {
             rows.insert(rows.end(), std::make_move_iterator(list.begin()), std::make_move_iterator(list.end()));
         }
     }
 
-    // order by && limit
-    if (!layerOrderBySortFactors_.empty()) {
+    // sub_sentences
+    for (unsigned i = 1; i < sub_sentences_.size(); i++) {
+        auto& sentence = sub_sentences_[i];
+        switch (sentence.getType()) {
+            case cpp2::Sentence::Type::order_by_sentence:
+            {
+                auto& order_by_sentence = sentence.get_order_by_sentence();
+                auto& orderByFactors = order_by_sentence.get_order_by();
 
-        auto comparator = [this] (::nebula::graph::cpp2::RowValue& lhs, ::nebula::graph::cpp2::RowValue& rhs) {
-            const auto &lhsColumns = lhs.get_columns();
-            const auto &rhsColumns = rhs.get_columns();
-            for (auto &factor : layerOrderBySortFactors_) {
-                auto fieldIndex = factor.get_idx();
-                auto orderType = factor.get_type();
-                if (fieldIndex < 0 ||
-                    fieldIndex >= static_cast<int64_t>(lhsColumns.size()) ||
-                    fieldIndex >= static_cast<int64_t>(rhsColumns.size())) {
-                    continue;
-                }
+                auto comparator = [&orderByFactors] (::nebula::graph::cpp2::RowValue& lhs, ::nebula::graph::cpp2::RowValue& rhs) {
+                    const auto &lhsColumns = lhs.get_columns();
+                    const auto &rhsColumns = rhs.get_columns();
+                    for (auto &factor : orderByFactors) {
+                        auto fieldIndex = factor.get_idx();
+                        auto orderType = factor.get_type();
+                        if (fieldIndex < 0 ||
+                            fieldIndex >= static_cast<int64_t>(lhsColumns.size()) ||
+                            fieldIndex >= static_cast<int64_t>(rhsColumns.size())) {
+                            continue;
+                        }
 
-                if (lhsColumns[fieldIndex] == rhsColumns[fieldIndex]) {
-                    continue;
-                }
-                if (orderType == ::nebula::storage::cpp2::OrderByType::ASCEND) {
-                    return lhsColumns[fieldIndex] < rhsColumns[fieldIndex];
-                } else if (orderType == ::nebula::storage::cpp2::OrderByType::DESCEND) {
-                    return lhsColumns[fieldIndex] > rhsColumns[fieldIndex];
+                        if (lhsColumns[fieldIndex] == rhsColumns[fieldIndex]) {
+                            continue;
+                        }
+                        if (orderType == ::nebula::storage::cpp2::OrderByType::ASCEND) {
+                            return lhsColumns[fieldIndex] < rhsColumns[fieldIndex];
+                        } else if (orderType == ::nebula::storage::cpp2::OrderByType::DESCEND) {
+                            return lhsColumns[fieldIndex] > rhsColumns[fieldIndex];
+                        }
+                    }
+                    return false;
+                };
+                std::sort(rows.begin(), rows.end(), comparator);
+            }
+                break;
+            case cpp2::Sentence::Type::limit_sentence:
+            {
+                auto& limit_sentence = sentence.get_limit_sentence();
+                auto cnt = static_cast<uint64_t >(limit_sentence.get_offset() + limit_sentence.get_count());
+                if (rows.size() > cnt) {
+                    rows.resize(cnt);
                 }
             }
-            return false;
-        };
+                break;
+            case cpp2::Sentence::Type::group_by_sentence:
+            {
+                auto& group_by_sentence = sentence.get_group_by_sentence();
+                auto& group_columns = group_by_sentence.get_group();
+                auto& yields_columns = group_by_sentence.get_yields();
+                std::vector<std::unique_ptr<Expression>> group_columns_expr;
+                std::vector<std::unique_ptr<Expression>> yields_columns_expr;
+                {
+                    group_columns_expr.reserve(group_columns.size());
+                    for (auto& group : group_columns) {
+                        group_columns_expr.emplace_back(Expression::decode(group.get_expr()).value());
+                    }
+                    yields_columns_expr.reserve(yields_columns.size());
+                    for (auto& yield : yields_columns) {
+                        yields_columns_expr.emplace_back(Expression::decode(yield.get_expr()).value());
+                    }
+                }
 
-        if (layer_limit_count_ > 0 && rows.size() > static_cast<uint64_t>(layer_limit_count_)) {
-            std::nth_element(rows.begin(), rows.begin() + layer_limit_count_, rows.end(), comparator);
-            rows.resize(layer_limit_count_);
+                using FunCols = std::vector<std::shared_ptr<graph::AggFun>>;
+                // key : the column values of group by, val: function table of aggregated columns
+                using GroupData = std::unordered_map<graph::ColVals, FunCols, graph::ColsHasher>;
+
+                GroupData data;
+                Getters getters;
+                for (auto& it : rows) {
+                    graph::ColVals groupVals;
+                    FunCols calVals;
+                    // Firstly: group the cols
+                    for (unsigned g_idx = 0; g_idx < group_columns.size(); g_idx++) {
+                        cpp2::ColumnValue::Type valType = cpp2::ColumnValue::Type::__EMPTY__;
+                        getters.getInputProp = [&] (const std::string & prop) -> OptVariantType {
+                            auto indexIt = schemaMap_.find(prop);
+                            if (indexIt == schemaMap_.end()) {
+                                LOG(ERROR) << prop <<  " is nonexistent";
+                                return Status::Error("%s is nonexistent", prop.c_str());
+                            }
+                            auto val = it.columns[indexIt->second];
+                            valType = val.getType();
+                            return toVariantType(val);
+                        };
+
+                        auto eval = col->expr()->eval(getters);
+                        if (!eval.ok()) {
+                            return eval.status();
+                        }
+
+                        auto cVal = toColumnValue(eval.value(), valType);
+                        if (!cVal.ok()) {
+                            return cVal.status();
+                        }
+                        groupVals.vec.emplace_back(std::move(cVal).value());
+                    }
+
+                    auto findIt = data.find(groupVals);
+
+                    // Secondly: get the value of the aggregated column
+
+                    // Get all aggregation function
+                    if (findIt == data.end()) {
+                        for (auto &col : yieldCols_) {
+                            auto funPtr = funVec[col->getFunName()]();
+                            calVals.emplace_back(std::move(funPtr));
+                        }
+                    } else {
+                        calVals = findIt->second;
+                    }
+
+                    // Apply value
+                    auto i = 0u;
+                    for (auto &col : calVals) {
+                        cpp2::ColumnValue::Type valType = cpp2::ColumnValue::Type::__EMPTY__;
+                        getters.getInputProp = [&] (const std::string &prop) -> OptVariantType{
+                            auto indexIt = schemaMap_.find(prop);
+                            if (indexIt == schemaMap_.end()) {
+                                LOG(ERROR) << prop <<  " is nonexistent";
+                                return Status::Error("%s is nonexistent", prop.c_str());
+                            }
+                            auto val = it.columns[indexIt->second];
+                            valType = val.getType();
+                            return toVariantType(val);
+                        };
+                        auto eval = yieldCols_[i]->expr()->eval(getters);
+                        if (!eval.ok()) {
+                            return eval.status();
+                        }
+
+                        auto cVal = toColumnValue(std::move(eval).value(), valType);
+                        if (!cVal.ok()) {
+                            return cVal.status();
+                        }
+                        col->apply(cVal.value());
+                        i++;
+                    }
+
+                    if (findIt == data.end()) {
+                        data.emplace(std::move(groupVals), std::move(calVals));
+                    }
+                }
+
+                // Generate result data
+                rows_.clear();
+                for (auto& item : data) {
+                    std::vector<cpp2::ColumnValue> row;
+                    for (auto& col : item.second) {
+                        row.emplace_back(col->getResult());
+                    }
+                    rows_.emplace_back();
+                    rows_.back().set_columns(std::move(row));
+                }
+            }
+                break;
+            case cpp2::Sentence::Type::yield_sentence:
+            {
+
+            }
+                break;
+            default:
+                break;
         }
-
-        std::sort(rows.begin(), rows.end(), comparator);
     }
 
     // set resp
     resp_.set_rows(std::move(rows));
 }
 
-cpp2::ErrorCode QueryBoundWholePushDownProcessor::buildContexts(const cpp2::GetNeighborsWholePushDownRequest& req) {
+cpp2::ErrorCode QueryBoundWholePushDownV2Processor::buildContexts(const cpp2::GetNeighborsWholePushDownV2Request& req) {
     expCtx_ = std::make_unique<ExpressionContext>();
+    // sub_sentences
+    sub_sentences_ = req.get_sentences();
+    if (sub_sentences_.empty() || sub_sentences_[0].getType() != cpp2::Sentence::Type::go_sentence) {
+        return cpp2::ErrorCode::E_INVALID_SENTENCE;
+    }
+    auto& go_sentence = sub_sentences_[0].get_go_sentence();
+
+    for (unsigned i = 1; i < sub_sentences_.size(); i++) {
+        if (sub_sentences_[i].getType() == cpp2::Sentence::Type::go_sentence
+            || sub_sentences_[i].getType() == cpp2::Sentence::Type::go_sentence) {
+            return cpp2::ErrorCode::E_INVALID_SENTENCE;
+        }
+    }
+
     // filter
     {
-        const auto& filterStr = req.get_filter();
+        const auto& filterStr = go_sentence.get_where();
         if (!filterStr.empty()) {
             StatusOr<std::unique_ptr<Expression>> expRet = Expression::decode(filterStr);
             if (!expRet.ok()) {
@@ -403,7 +497,7 @@ cpp2::ErrorCode QueryBoundWholePushDownProcessor::buildContexts(const cpp2::GetN
 
     // yields
     {
-        yields_ = req.get_yields();
+        yields_ = go_sentence.get_yields();
         yields_expr_.reserve(yields_.size());
         std::unordered_set<std::string> yields_colnames_set;
         for (auto& yield : yields_) {
@@ -466,21 +560,37 @@ cpp2::ErrorCode QueryBoundWholePushDownProcessor::buildContexts(const cpp2::GetN
     }
 
     // edge types
-    edges_ = req.get_edge_types();
-
-    // layer limit count
-    layer_limit_count_ = req.get_layer_limit();
-    // order by factors
-    layerOrderBySortFactors_ = req.get_order_by();
+    edges_ = go_sentence.get_edge_types();
 
     // vidIndex
     vidIndex_ = req.get_vid_index();
+
+    // sub_sentences
+    for (unsigned i = 1; i < sub_sentences_.size(); i++) {
+        auto& sentence = sub_sentences_[i];
+        switch (sentence.getType()) {
+            case cpp2::Sentence::Type::limit_sentence:
+            {
+                auto& limit_sentence = sentence.get_limit_sentence();
+                if (limit_sentence.get_offset() < 0 || limit_sentence.get_count() < 0) {
+                    return cpp2::ErrorCode::E_INVALID_SENTENCE;
+                }
+            }
+                break;
+            case cpp2::Sentence::Type::group_by_sentence:
+            case cpp2::Sentence::Type::order_by_sentence:
+            case cpp2::Sentence::Type::yield_sentence:
+                break;
+            default:
+                return cpp2::ErrorCode::E_INVALID_SENTENCE;
+        }
+    }
 
     return cpp2::ErrorCode::SUCCEEDED;
 }
 
 folly::Future<std::vector<OneVertexResp>>
-QueryBoundWholePushDownProcessor::asyncProcessBucket(BucketWithIndex bucket) {
+QueryBoundWholePushDownV2Processor::asyncProcessBucket(BucketWithIndex bucket) {
     folly::Promise<std::vector<OneVertexResp>> pro;
     auto f = pro.getFuture();
     executor_->add([this, p = std::move(pro), b = std::move(bucket)] () mutable {
@@ -496,8 +606,8 @@ QueryBoundWholePushDownProcessor::asyncProcessBucket(BucketWithIndex bucket) {
     return f;
 }
 
-std::vector<QueryBoundWholePushDownProcessor::BucketWithIndex>
-QueryBoundWholePushDownProcessor::genBuckets() {
+std::vector<QueryBoundWholePushDownV2Processor::BucketWithIndex>
+QueryBoundWholePushDownV2Processor::genBuckets() {
     std::vector<BucketWithIndex> buckets;
     int32_t verticesNum = 0;
     for (auto& pv : inputs_) {
@@ -543,26 +653,18 @@ QueryBoundWholePushDownProcessor::genBuckets() {
     return buckets;
 }
 
-void QueryBoundWholePushDownProcessor::process(const cpp2::GetNeighborsWholePushDownRequest& req) {
+void QueryBoundWholePushDownV2Processor::process(const cpp2::GetNeighborsWholePushDownV2Request& req) {
     CHECK_NOTNULL(executor_);
     spaceId_ = req.get_space_id();
 
     // inputs
-    // result
     inputs_ = std::move(const_cast<std::unordered_map<PartitionID, std::vector<nebula::graph::cpp2::RowValue>>&>(req.get_parts()));
     for (auto& part : inputs_) {
         auto partId = part.first;
         auto& rows = part.second;
-        auto& result = result_[partId];
+        auto& result = go_result_[partId];
         result.resize(rows.size());
     }
-
-    int32_t yieldsNum = req.get_yields().size();
-    VLOG(1) << "Total edge types " << req.edge_types.size()
-            << ", total yield columns " << yieldsNum
-            << ", the first column "
-            << (yieldsNum > 0 ? req.get_yields()[0].get_alias() : "");
-    VLOG(3) << "Receive request, spaceId " << spaceId_ << ", yield cols " << yieldsNum;
 
     auto retCode = buildContexts(req);
     if (retCode != cpp2::ErrorCode::SUCCEEDED) {
@@ -578,8 +680,8 @@ void QueryBoundWholePushDownProcessor::process(const cpp2::GetNeighborsWholePush
     for (auto& bucket : buckets) {
         results.emplace_back(asyncProcessBucket(std::move(bucket)));
     }
-    folly::collectAll(results).via(executor_).thenTry(
-        [this, yieldsNum] (auto&& t) mutable {
+
+    folly::collectAll(results).via(executor_).thenTry([this] (auto&& t) mutable {
         CHECK(!t.hasException());
         std::unordered_set<PartitionID> failedParts;
         for (auto& bucketTry : t.value()) {
@@ -598,7 +700,7 @@ void QueryBoundWholePushDownProcessor::process(const cpp2::GetNeighborsWholePush
                 }
             }
         }
-        this->onProcessFinished(yieldsNum);
+        this->onProcessFinished();
         this->onFinished();
     });
 }

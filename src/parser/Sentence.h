@@ -74,6 +74,7 @@ public:
         kDropSnapshot,
         kAdmin,
         kGoWholePushDown,
+        kGoWholePushDownV2,
     };
 
     Kind kind() const {

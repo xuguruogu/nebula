@@ -15,7 +15,7 @@ DECLARE_int32(reserved_edges_one_vertex);
 namespace nebula {
 namespace storage {
 
-class QueryBoundWholePushDownProcessor
+class QueryBoundWholePushDownV2Processor
     : public BaseProcessor<cpp2::GetNeighborsWholePushDownResponse> {
 //    FRIEND_TEST(QueryBoundTest,  GenBucketsTest);
 
@@ -23,57 +23,51 @@ class QueryBoundWholePushDownProcessor
         std::vector<std::tuple<PartitionID, VertexID, IndexID>> vertices_;
     };
 public:
-    static QueryBoundWholePushDownProcessor* instance(kvstore::KVStore* kvstore,
+    static QueryBoundWholePushDownV2Processor* instance(kvstore::KVStore* kvstore,
                                                       meta::SchemaManager* schemaMan,
                                                       stats::Stats* stats,
                                                       folly::Executor* executor,
                                                       VertexCache* cache = nullptr) {
-        return new QueryBoundWholePushDownProcessor(kvstore, schemaMan, stats, executor, cache);
+        return new QueryBoundWholePushDownV2Processor(kvstore, schemaMan, stats, executor, cache);
     }
 
-    void process(const cpp2::GetNeighborsWholePushDownRequest& req);
+    void process(const cpp2::GetNeighborsWholePushDownV2Request& req);
 
 protected:
-    explicit QueryBoundWholePushDownProcessor(kvstore::KVStore* kvstore,
-                                meta::SchemaManager* schemaMan,
-                                stats::Stats* stats,
-                                folly::Executor* executor = nullptr,
-                                VertexCache* cache = nullptr)
+    explicit QueryBoundWholePushDownV2Processor(kvstore::KVStore* kvstore,
+                                                meta::SchemaManager* schemaMan,
+                                                stats::Stats* stats,
+                                                folly::Executor* executor = nullptr,
+                                                VertexCache* cache = nullptr)
         : BaseProcessor<cpp2::GetNeighborsWholePushDownResponse>(kvstore, schemaMan, stats)
-        , executor_(executor)
-        , vertexCache_(cache) {}
+        , executor_(executor), vertexCache_(cache) {}
 
     kvstore::ResultCode processVertex(PartitionID partId, VertexID vId, IndexID idx);
 
-    void onProcessFinished(int32_t retNum);
-
+    void onProcessFinished();
 private:
     std::vector<BucketWithIndex> genBuckets();
     folly::Future<std::vector<OneVertexResp>> asyncProcessBucket(BucketWithIndex bucket);
-    cpp2::ErrorCode buildContexts(const cpp2::GetNeighborsWholePushDownRequest& req);
+    cpp2::ErrorCode buildContexts(const cpp2::GetNeighborsWholePushDownV2Request& req);
 protected:
     GraphSpaceID  spaceId_;
     std::unique_ptr<ExpressionContext> expCtx_;
 
-    std::unique_ptr<Expression> filter_;
-    std::unique_ptr<nebula::meta::SchemaProviderIf> input_schema_;
     std::unordered_map<TagID, std::shared_ptr<const nebula::meta::SchemaProviderIf>> src_tag_schema_;
     std::unordered_map<EdgeType, std::shared_ptr<const nebula::meta::SchemaProviderIf>> edge_schema_;
     std::unordered_map<std::string, EdgeType> edgeMap_;
     std::unordered_map<std::string, TagID> srcTagMap_;
 
-    int32_t vidIndex_{-1};
-
-    int32_t layer_limit_count_{-1};
-    std::vector<nebula::storage::cpp2::OrderByFactor>   layerOrderBySortFactors_;
-
     std::unordered_map<PartitionID, std::vector<nebula::graph::cpp2::RowValue>> inputs_;
-    std::unordered_map<PartitionID, std::vector<std::vector<nebula::graph::cpp2::RowValue>>> result_;
-
+    std::unique_ptr<nebula::meta::SchemaProviderIf> input_schema_;
+    int32_t vidIndex_{-1};
+    std::vector<EdgeType> edges_;
+    std::unique_ptr<Expression> filter_;
     std::vector<nebula::storage::cpp2::YieldColumn> yields_;
     std::vector<std::unique_ptr<nebula::Expression>> yields_expr_;
+    std::unordered_map<PartitionID, std::vector<std::vector<nebula::graph::cpp2::RowValue>>> go_result_;
 
-    std::vector<EdgeType> edges_;
+    std::vector<nebula::storage::cpp2::Sentence> sub_sentences_;
 
     folly::Executor* executor_{nullptr};
     VertexCache* vertexCache_{nullptr};

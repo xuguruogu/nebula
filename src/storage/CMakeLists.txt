@@ -6,6 +6,7 @@ nebula_add_library(
     query/QueryBaseProcessor.cpp
     query/QueryBoundProcessor.cpp
     query/QueryBoundWholePushDownProcessor.cpp
+    query/QueryBoundWholePushDownV2Processor.cpp
     query/QueryVertexPropsProcessor.cpp
     query/QueryEdgePropsProcessor.cpp
     query/QueryStatsProcessor.cpp

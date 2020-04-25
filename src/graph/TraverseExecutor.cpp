@@ -11,6 +11,7 @@
 #include "dataman/RowWriter.h"
 #include "graph/GoExecutor.h"
 #include "graph/GoWholePushDownExecutor.h"
+#include "graph/GoWholePushDownV2Executor.h"
 #include "graph/PipeExecutor.h"
 #include "graph/OrderByExecutor.h"
 #include "graph/FetchVerticesExecutor.h"
@@ -45,6 +46,9 @@ TraverseExecutor::makeTraverseExecutor(Sentence *sentence, ExecutionContext *ect
             break;
         case Sentence::Kind::kGoWholePushDown:
             executor = std::make_unique<GoWholePushDownExecutor>(sentence, ectx);
+            break;
+        case Sentence::Kind::kGoWholePushDownV2:
+            executor = std::make_unique<GoWholePushDownV2Executor>(sentence, ectx);
             break;
         case Sentence::Kind::kPipe:
             executor = std::make_unique<PipeExecutor>(sentence, ectx);

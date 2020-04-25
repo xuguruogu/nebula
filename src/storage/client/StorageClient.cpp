@@ -198,6 +198,53 @@ StorageClient::getNeighborsWholePushDown(
         });
 }
 
+folly::SemiFuture<StorageRpcResponse<storage::cpp2::GetNeighborsWholePushDownResponse>>
+StorageClient::getNeighborsWholePushDownV2(
+    GraphSpaceID space, nebula::cpp2::Schema schema,
+    std::vector<graph::cpp2::RowValue> rows, int vid_idx,
+    const std::vector<nebula::storage::cpp2::Sentence>& sentences,
+    folly::EventBase* evb) {
+
+  auto status = clusterIdsToHosts(
+    space, std::move(rows), [vid_idx] (const graph::cpp2::RowValue& row) {
+      const nebula::graph::cpp2::ColumnValue& col = row.columns.at(vid_idx);
+      switch (col.getType()) {
+        case nebula::graph::cpp2::ColumnValue::Type::id:
+          return col.get_id();
+        case nebula::graph::cpp2::ColumnValue::Type::integer:
+          return col.get_integer();
+        default:
+          throw std::runtime_error("getNeighborsWholePushDownV2 not supported vid type.");
+      }
+    });
+
+    if (!status.ok()) {
+        return folly::makeFuture<StorageRpcResponse<cpp2::GetNeighborsWholePushDownResponse>>(
+            std::runtime_error(status.status().toString()));
+    }
+
+    auto& clusters = status.value();
+
+    std::unordered_map<HostAddr, cpp2::GetNeighborsWholePushDownV2Request> requests;
+    for (auto& c : clusters) {
+        auto& host = c.first;
+        auto& req = requests[host];
+        req.set_space_id(space);
+        req.set_schema(schema);
+        req.set_parts(std::move(c.second));
+        req.set_vid_index(vid_idx);
+        req.set_sentences(sentences);
+    }
+
+    return collectResponse(
+        evb, std::move(requests),
+        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsWholePushDownV2Request& r) {
+            return client->future_getBoundWholePushDownV2(r); },
+        [](const std::pair<const PartitionID,
+            std::vector<graph::cpp2::RowValue>>& p) {
+            return p.first;
+        });
+}
 
 folly::SemiFuture<StorageRpcResponse<cpp2::QueryStatsResponse>> StorageClient::neighborStats(
         GraphSpaceID space,

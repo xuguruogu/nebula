@@ -68,8 +68,17 @@ public:
 
     std::string toString() const override;
 
+    std::vector<const Sentence*> subSentenses() const {
+        std::vector<const Sentence*> sentenses;
+        for (auto& s : sentenses_) {
+            sentenses.emplace_back(s.get());
+        }
+        return sentenses;
+    };
+
     void optimizeWith(std::unique_ptr<OrderBySentence> order_by_sentense, std::unique_ptr<LimitSentence> limit_sentense);
-    bool canWholePushDown();
+    void optimizeWith(std::vector<std::unique_ptr<Sentence>> sentenses);
+    bool canWholePushDown() const;
 private:
     std::unique_ptr<StepClause>                 stepClause_;
     std::unique_ptr<FromClause>                 fromClause_;
@@ -78,6 +87,7 @@ private:
     std::unique_ptr<YieldClause>                yieldClause_;
     std::unique_ptr<OrderBySentence>            orderBySentense_;
     std::unique_ptr<LimitSentence>              limitSentense_;
+    std::vector<std::unique_ptr<Sentence>>      sentenses_;
 };
 
 
@@ -200,6 +210,8 @@ public:
 
     std::unique_ptr<Sentence> optimize(bool pushDown) override;
 
+    std::unique_ptr<Sentence> optimizeGo(std::vector<std::unique_ptr<Sentence>>& sentences);
+
     Sentence* left() const {
         return left_.get();
     }
@@ -210,7 +222,7 @@ public:
 
     std::string toString() const override;
 
-private:
+public:
     std::unique_ptr<Sentence>                   left_;
     std::unique_ptr<Sentence>                   right_;
 };
@@ -252,7 +264,7 @@ public:
         return orderByClause_.get();
     }
 
-    std::vector<OrderFactor*> factors() {
+    std::vector<OrderFactor*> factors() const {
         return orderByClause_->factors();
     }
 
@@ -547,11 +559,11 @@ public:
 
     std::string toString() const override;
 
-    int64_t offset() {
+    int64_t offset() const {
         return limitClause_->offset();
     }
 
-    int64_t count() {
+    int64_t count() const {
         return limitClause_->count();
     }
 
@@ -575,7 +587,7 @@ public:
         whereClause_.reset(clause);
     }
 
-    WhereClause* where() {
+    WhereClause* where() const {
         return whereClause_.get();
     }
 

@@ -138,6 +138,15 @@ public:
         int64_t layer_limit,
         folly::EventBase* evb = nullptr);
 
+    folly::SemiFuture<StorageRpcResponse<storage::cpp2::GetNeighborsWholePushDownResponse>>
+    getNeighborsWholePushDownV2(
+        GraphSpaceID space,
+        nebula::cpp2::Schema schema,
+        std::vector<graph::cpp2::RowValue> rows,
+        int vid_idx,
+        const std::vector<nebula::storage::cpp2::Sentence>& sentences,
+        folly::EventBase* evb = nullptr);
+
     folly::SemiFuture<StorageRpcResponse<storage::cpp2::QueryStatsResponse>> neighborStats(
         GraphSpaceID space,
         std::vector<VertexID> vertices,
