@@ -143,6 +143,8 @@ std::unique_ptr<Sentence> SetSentence::optimize(bool pushDown) {
     return nullptr;
 }
 
+#if 0
+
 static bool __contains_go(PipedSentence* piped_sentence) {
     if (piped_sentence->left()->kind() == Sentence::Kind::kGo ||
         piped_sentence->right()->kind() == Sentence::Kind::kGo) {
@@ -241,6 +243,7 @@ static const GoSentence* __locate_optimize_go(Sentence* sentence) {
     }
 }
 
+#endif
 
 std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
     (void)pushDown;
