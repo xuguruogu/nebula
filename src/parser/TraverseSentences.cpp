@@ -243,6 +243,8 @@ static const GoSentence* __locate_optimize_go(Sentence* sentence) {
 
 
 std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
+    (void)pushDown;
+#if 0
     if (pushDown) {
 //        // go ... | order by ... | limit ...
 //        if (left()->kind() == Sentence::Kind::kPipe &&
@@ -312,7 +314,7 @@ std::unique_ptr<Sentence> PipedSentence::optimize(bool pushDown) {
     if (right) {
         right_ = std::move(right);
     }
-
+#endif
     return nullptr;
 }
 
