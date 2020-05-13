@@ -15,6 +15,7 @@ ExternalProject_Add(
     STAMP_DIR ${BUILD_INFO_DIR}
     DOWNLOAD_DIR ${DOWNLOAD_DIR}
     SOURCE_DIR ${source_dir}
+    PATCH_COMMAND patch -p0 < ${CMAKE_SOURCE_DIR}/patches/glog-0.3.5.patch
     CONFIGURE_COMMAND
         ${common_configure_envs}
         ./configure ${common_configure_args}

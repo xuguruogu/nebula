@@ -1,0 +1,21 @@
+--- src/logging.origin.cc	2020-05-06 02:30:36.578523735 -0400
++++ src/logging.cc	2020-05-06 02:23:19.149702649 -0400
+@@ -904,7 +904,7 @@
+ 
+ bool LogFileObject::CreateLogfile(const string& time_pid_string) {
+   string string_filename = base_filename_+filename_extension_+
+-                           time_pid_string;
++                           time_pid_string + ".log";
+   const char* filename = string_filename.c_str();
+   int fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, FLAGS_logfile_mode);
+   if (fd == -1) return false;
+@@ -1036,8 +1036,7 @@
+       // deadlock. Simply use a name like invalid-user.
+       if (uidname.empty()) uidname = "invalid-user";
+ 
+-      stripped_filename = stripped_filename+'.'+hostname+'.'
+-                          +uidname+".log."
++      stripped_filename = stripped_filename+'.'
+                           +LogSeverityNames[severity_]+'.';
+       // We're going to (potentially) try to put logs in several different dirs
+       const vector<string> & log_dirs = GetLoggingDirectories();
