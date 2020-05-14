@@ -1,0 +1,11 @@
+--- folly/detail/Demangle.h.origin	2020-05-14 12:45:56.000000000 +0800
++++ folly/detail/Demangle.h	2020-05-14 12:46:13.000000000 +0800
+@@ -19,7 +19,7 @@
+ #include <cstddef>
+ 
+ #if __has_include(<demangle.h>)
+-#define FOLLY_DETAIL_HAVE_DEMANGLE_H 1
++#define FOLLY_DETAIL_HAVE_DEMANGLE_H 0
+ #else
+ #define FOLLY_DETAIL_HAVE_DEMANGLE_H 0
+ #endif
