@@ -213,7 +213,7 @@ folly::Future<StatusOr<Response>> StorageClient::getResponse(
         auto client = clientsMan_->client(host, evb, false, FLAGS_storage_client_timeout_ms);
         auto spaceId = request.second.get_space_id();
         auto partId = request.second.get_part_id();
-        LOG(INFO) << "Send request to storage " << host;
+        VLOG(1) << "Send request to storage " << host;
         remoteFunc(client.get(), std::move(request.second)).via(evb)
              .then([spaceId, partId, p = std::move(pro),
                     duration, this] (folly::Try<Response>&& t) mutable {
