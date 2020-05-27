@@ -45,7 +45,7 @@ void UseExecutor::execute() {
 
         ectx()->rctx()->session()->setSpace(*sentence_->space(), spaceId);
 
-        FLOG_INFO("Graph space switched to `%s', space id: %d",
+        FVLOG1("Graph space switched to `%s', space id: %d",
                    sentence_->space()->c_str(), spaceId);
 
         doFinish(Executor::ProcessControl::kNext);

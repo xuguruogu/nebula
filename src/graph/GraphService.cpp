@@ -47,7 +47,7 @@ folly::Future<cpp2::AuthResponse> GraphService::future_authenticate(
         const std::string& username,
         const std::string& password) {
     auto *peer = getConnectionContext()->getPeerAddress();
-    LOG(INFO) << "Authenticating user " << username << " from " << peer->describe();
+    VLOG(1) << "Authenticating user " << username << " from " << peer->describe();
 
     RequestContext<cpp2::AuthResponse> ctx;
     auto session = sessionManager_->createSession();
