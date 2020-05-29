@@ -54,7 +54,7 @@ void RebuildIndexProcessor::processInternal(const cpp2::RebuildIndexReq& req) {
     }
 
     std::vector<folly::Future<Status>> results;
-    auto activeHosts = ActiveHostsMan::getActiveHosts(kvstore_, FLAGS_heartbeat_interval_secs + 1);
+    auto activeHosts = ActiveHostsMan::getActiveHosts(kvstore_, FLAGS_heartbeat_interval_secs * 2);
     while (leaderIter->valid()) {
         auto host = MetaServiceUtils::parseLeaderKey(leaderIter->key());
         auto ip = NetworkUtils::intToIPv4(host.get_ip());
