@@ -60,6 +60,16 @@ void MetaHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers) no
     hdfsPort_ = headers->getIntQueryParam("port");
     hdfsPath_ = headers->getQueryParam("path");
     spaceID_ = headers->getIntQueryParam("space");
+
+    if (headers->hasQueryParam("tag")) {
+        auto& tag = headers->getQueryParam("tag");
+        tag_.assign(folly::to<TagID>(tag));
+    }
+
+    if (headers->hasQueryParam("edge")) {
+        auto& edge = headers->getQueryParam("edge");
+        edge_.assign(folly::to<EdgeType>(edge));
+    }
 }
 
 
@@ -87,7 +97,7 @@ void MetaHttpDownloadHandler::onEOM() noexcept {
     }
 
     if (helper_->checkHadoopPath()) {
-        if (dispatchSSTFiles(hdfsHost_, hdfsPort_, hdfsPath_)) {
+        if (dispatchSSTFiles()) {
             ResponseBuilder(downstream_)
                 .status(WebServiceUtils::to(HttpStatusCode::OK),
                         WebServiceUtils::toString(HttpStatusCode::OK))
@@ -126,10 +136,8 @@ void MetaHttpDownloadHandler::onError(ProxygenError error) noexcept {
                << proxygen::getErrorString(error);
 }
 
-bool MetaHttpDownloadHandler::dispatchSSTFiles(const std::string& hdfsHost,
-                                               int hdfsPort,
-                                               const std::string& hdfsPath) {
-    auto result = helper_->ls(hdfsHost, hdfsPort, hdfsPath);
+bool MetaHttpDownloadHandler::dispatchSSTFiles() {
+    auto result = helper_->ls(hdfsHost_, hdfsPort_, hdfsPath_);
     if (!result.ok()) {
         LOG(ERROR) << "Dispatch SSTFile Failed";
         return false;
@@ -176,16 +184,36 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles(const std::string& hdfsHost,
     for (auto &pair : hostPartition) {
         std::string partsStr;
         folly::join(",", pair.second, partsStr);
-
         auto storageIP = network::NetworkUtils::intToIPv4(pair.first.first);
-        auto dispatcher = [storageIP, hdfsHost, hdfsPort, hdfsPath, partsStr, this]() {
-            static const char *tmp = "http://%s:%d/%s?host=%s&port=%d&path=%s&parts=%s&space=%d";
-            std::string url = folly::stringPrintf(tmp, storageIP.c_str(),
-                                                  FLAGS_ws_storage_http_port, "download",
-                                                  hdfsHost.c_str(), hdfsPort, hdfsPath.c_str(),
-                                                  partsStr.c_str(), spaceID_);
+
+        std::string url;
+        if (edge_.has_value()) {
+            url = folly::stringPrintf(
+                "http://%s:%d/download?host=%s&port=%d&path=%s&parts=%s&space=%d&edge=%d",
+                storageIP.c_str(), FLAGS_ws_storage_http_port,
+                hdfsHost_.c_str(), hdfsPort_, hdfsPath_.c_str(),
+                partsStr.c_str(), spaceID_, edge_.value());
+        } else if (tag_.has_value()) {
+            url = folly::stringPrintf(
+                "http://%s:%d/download?host=%s&port=%d&path=%s&parts=%s&space=%d&tag=%d",
+                storageIP.c_str(), FLAGS_ws_storage_http_port,
+                hdfsHost_.c_str(), hdfsPort_, hdfsPath_.c_str(),
+                partsStr.c_str(), spaceID_, tag_.value());
+        } else {
+            url = folly::stringPrintf(
+                "http://%s:%d/download?host=%s&port=%d&path=%s&parts=%s&space=%d",
+                storageIP.c_str(), FLAGS_ws_storage_http_port,
+                hdfsHost_.c_str(), hdfsPort_, hdfsPath_.c_str(),
+                partsStr.c_str(), spaceID_);
+        }
+
+        auto dispatcher = [url] {
             auto downloadResult = nebula::http::HttpClient::get(url);
-            return downloadResult.ok() && downloadResult.value() == "SSTFile download successfully";
+            if (downloadResult.ok() && downloadResult.value() == "SSTFile download successfully") {
+                return true;
+            }
+            LOG(ERROR) << "Download Failed, url: " << url << " error: " << downloadResult.value();
+            return false;
         };
         auto future = pool_->addTask(dispatcher);
         futures.push_back(std::move(future));

@@ -13,13 +13,15 @@ namespace hdfs {
 StatusOr<std::string> HdfsCommandHelper::ls(const std::string& hdfsHost,
                                             int32_t hdfsPort,
                                             const std::string& hdfsPath) {
-    auto command = folly::stringPrintf("hdfs dfs -ls hdfs://%s:%d%s",
+    auto command = folly::stringPrintf("hadoop fs -ls hdfs://%s:%d%s",
                                        hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
-    LOG(INFO) << "Running HDFS Command: " << command;
+    LOG(INFO) << "Start Running HDFS Command: " << command;
     auto result = ProcessUtils::runCommand(command.c_str());
     if (result.ok()) {
-        return result.value();
+        LOG(INFO) << "HDFS Command Finished: " << command << " : " << result.value();
+        return result;
     } else {
+        LOG(INFO) << "HDFS Command Failed: " << command << " : " << result.status().toString();
         return Status::Error(folly::stringPrintf("Failed to run %s", command.c_str()));
     }
 }
@@ -28,14 +30,16 @@ StatusOr<std::string> HdfsCommandHelper::copyToLocal(const std::string& hdfsHost
                                                      int32_t hdfsPort,
                                                      const std::string& hdfsPath,
                                                      const std::string& localPath) {
-    auto command = folly::stringPrintf("hdfs dfs -copyToLocal hdfs://%s:%d%s %s",
+    auto command = folly::stringPrintf("hadoop fs -copyToLocal hdfs://%s:%d%s %s",
                                        hdfsHost.c_str(), hdfsPort, hdfsPath.c_str(),
                                        localPath.c_str());
-    LOG(INFO) << "Running HDFS Command: " << command;
+    LOG(INFO) << "Start Running HDFS Command: " << command;
     auto result = ProcessUtils::runCommand(command.c_str());
     if (result.ok()) {
-        return result.value();
+        LOG(INFO) << "HDFS Command Finished: " << command << " : " << result.value();
+        return result;
     } else {
+        LOG(INFO) << "HDFS Command Failed: " << command << " : " << result.status().toString();
         return Status::Error(folly::stringPrintf("Failed to run %s", command.c_str()));
     }
 }

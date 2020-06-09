@@ -340,6 +340,8 @@ int32_t RocksEngine::totalPartsNum() {
 
 ResultCode RocksEngine::ingest(const std::vector<std::string>& files) {
     rocksdb::IngestExternalFileOptions options;
+    options.move_files = true;
+    options.failed_move_fall_back_to_copy = false;
     rocksdb::Status status = db_->IngestExternalFile(files, options);
     if (status.ok()) {
         return ResultCode::SUCCEEDED;

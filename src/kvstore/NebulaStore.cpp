@@ -57,7 +57,7 @@ bool NebulaStore::init() {
             auto rootPath = folly::stringPrintf("%s/nebula", path.c_str());
             auto dirs = fs::FileUtils::listAllDirsInDir(rootPath.c_str());
             for (auto& dir : dirs) {
-                LOG(INFO) << "Scan path \"" << path << "/" << dir << "\"";
+                LOG(INFO) << "Scan path \"" << path << "/nebula/" << dir << "\"";
                 try {
                     GraphSpaceID spaceId;
                     try {
@@ -560,12 +560,27 @@ ErrorOr<ResultCode, std::shared_ptr<Part>> NebulaStore::part(GraphSpaceID spaceI
 }
 
 ResultCode NebulaStore::ingest(GraphSpaceID spaceId) {
+    return ingest(spaceId, "general");
+}
+
+ResultCode NebulaStore::ingestTag(GraphSpaceID spaceId, TagID tagId) {
+    return ingest(spaceId, folly::stringPrintf("tag/%d", tagId));
+}
+
+ResultCode NebulaStore::ingestEdge(GraphSpaceID spaceId, EdgeType edgeType) {
+    return ingest(spaceId, folly::stringPrintf("edge/%d", edgeType));
+}
+
+ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) {
     auto spaceRet = space(spaceId);
     if (!ok(spaceRet)) {
         return error(spaceRet);
     }
     auto space = nebula::value(spaceRet);
+
+    std::vector<std::vector<std::string>> extraFiles;
     for (auto& engine : space->engines_) {
+        std::vector<std::string> engineExtraFiles;
         auto parts = engine->allParts();
         for (auto part : parts) {
             auto ret = this->engine(spaceId, part);
@@ -573,22 +588,31 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId) {
                 return error(ret);
             }
 
-            auto path = folly::stringPrintf("%s/download/%d", value(ret)->getDataRoot(), part);
+            auto path = folly::stringPrintf(
+                "%s/download/%s/%d",
+                value(ret)->getDataRoot(), subdir.c_str(), part);
             if (!fs::FileUtils::exist(path)) {
-                LOG(INFO) << path << " not existed";
+                LOG(WARNING) << path << " not existed";
                 continue;
             }
-
             auto files = nebula::fs::FileUtils::listAllFilesInDir(path.c_str(), true, "*.sst");
-            for (auto file : files) {
-                LOG(INFO) << "Ingesting extra file: " << file;
-                auto code = engine->ingest(std::vector<std::string>({file}));
-                if (code != ResultCode::SUCCEEDED) {
-                    return code;
-                }
+            engineExtraFiles.insert(engineExtraFiles.begin(), files.begin(), files.end());
+        }
+        extraFiles.emplace_back(std::move(engineExtraFiles));
+    }
+
+    for (unsigned i = 0; i < space->engines_.size(); i++) {
+        auto engineExtraFiles = std::move(extraFiles[i]);
+        KVEngine* engine = space->engines_[i].get();
+        if (!engineExtraFiles.empty()) {
+            LOG(INFO) << "Ingesting extra file:\n" << folly::join("\n", engineExtraFiles);
+            auto code = engine->ingest(std::move(engineExtraFiles));
+            if (code != ResultCode::SUCCEEDED) {
+                return code;
             }
         }
     }
+
     return ResultCode::SUCCEEDED;
 }
 
