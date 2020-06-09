@@ -650,6 +650,12 @@ TEST_F(ExpressionTest, FunctionCall) {
 
     TEST_EXPR(length("hello"), 5);
     TEST_EXPR(length(""), 0);
+
+    TEST_EXPR(min2(1, 2), 1);
+    TEST_EXPR(max2(1, 2), 2);
+
+    TEST_EXPR(min2(0.1, 0.2), 0.1);
+    TEST_EXPR(max2(0.1, 0.2), 0.2);
 }
 
 TEST_F(ExpressionTest, StringFunctionCall) {

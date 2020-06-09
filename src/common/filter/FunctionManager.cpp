@@ -364,6 +364,42 @@ FunctionManager::FunctionManager() {
         };
     }
     {
+        auto &attr = functions_["min2"];
+        attr.minArity_ = 2;
+        attr.maxArity_ = 2;
+        attr.body_ = [] (const auto &args) {
+            if (Expression::isInt(args[0])) {
+                return VariantType(std::min(
+                    Expression::asInt(args[0]),
+                    Expression::asInt(args[1])
+                ));
+            } else {
+                return VariantType(std::min(
+                    Expression::asDouble(args[0]),
+                    Expression::asDouble(args[1])
+                ));
+            }
+        };
+    }
+    {
+        auto &attr = functions_["max2"];
+        attr.minArity_ = 2;
+        attr.maxArity_ = 2;
+        attr.body_ = [] (const auto &args) {
+            if (Expression::isInt(args[0])) {
+                return VariantType(std::max(
+                    Expression::asInt(args[0]),
+                    Expression::asInt(args[1])
+                ));
+            } else {
+                return VariantType(std::max(
+                    Expression::asDouble(args[0]),
+                    Expression::asDouble(args[1])
+                ));
+            }
+        };
+    }
+    {
         auto &attr = functions_["lpad"];
         attr.minArity_ = 3;
         attr.maxArity_ = 3;
