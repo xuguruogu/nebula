@@ -51,6 +51,40 @@ void mockData(kvstore::KVStore* kv,
     }
 }
 
+void mockDataMultiVersions(kvstore::KVStore* kv,
+              meta::SchemaManager* schemaMng,
+              TagVersion version) {
+    LOG(INFO) << "Prepare data...";
+    for (PartitionID partId = 0; partId < 3; partId++) {
+        std::vector<kvstore::KV> data;
+        for (int32_t vertexId = partId * 10; vertexId < (partId + 1) * 10; vertexId++) {
+            for (int32_t tagId = 3001; tagId < 3010; tagId++) {
+                auto key = NebulaKeyUtils::vertexKey(partId, vertexId, tagId, folly::Endian::big(version));
+                auto schema = schemaMng->getTagSchema(0, tagId);
+                RowWriter writer(schema);
+                for (int64_t numInt = 0; numInt < 3; numInt++) {
+                    writer << (numInt + version);
+                }
+                for (int32_t numString = 3; numString < 6; numString++) {
+                    writer << folly::stringPrintf("tag_string_col_%ld", numString + version);
+                }
+                auto val = writer.encode();
+                data.emplace_back(std::move(key), std::move(val));
+            }
+        }
+        folly::Baton<true, std::atomic> baton;
+        kv->asyncMultiPut(
+            0,
+            partId,
+            std::move(data),
+            [&](kvstore::ResultCode code) {
+                EXPECT_EQ(code, kvstore::ResultCode::SUCCEEDED);
+                baton.post();
+            });
+        baton.wait();
+    }
+}
+
 void testWithVersion(kvstore::KVStore* kv,
                      meta::SchemaManager* schemaMng,
                      folly::CPUThreadPoolExecutor* executor,
@@ -179,6 +213,70 @@ TEST(QueryVertexPropsTest, SimpleTest) {
     version = 0;
     mockData(kv.get(), schemaMng.get(), version);
     testWithVersion(kv.get(), schemaMng.get(), executor.get(), version);
+}
+
+void buildRequest(cpp2::VertexPropRequest& req) {
+    req.set_space_id(0);
+    decltype(req.parts) tmpIds;
+    for (auto partId = 0; partId < 3; partId++) {
+        for (auto vertexId =  partId * 10;
+             vertexId < (partId + 1) * 10;
+             vertexId++) {
+            tmpIds[partId].push_back(vertexId);
+        }
+    }
+    req.set_parts(std::move(tmpIds));
+    // Return tag props col_0, col_2, col_4
+    decltype(req.return_columns) tmpColumns;
+    for (int i = 0; i < 6; i++) {
+        tmpColumns.emplace_back(TestUtils::vertexPropDef(
+            folly::stringPrintf("tag_%d_col_%d", 3001, i), 3001));
+    }
+    req.set_return_columns(std::move(tmpColumns));
+}
+
+TEST(QueryVertexPropsTest, MultiVersionsTest) {
+    fs::TempDir rootPath("/tmp/QueryVertexPropsTest.XXXXXX");
+    std::unique_ptr<kvstore::KVStore> kv(TestUtils::initKV(rootPath.path()));
+
+    LOG(INFO) << "Prepare meta...";
+    auto schemaMng = TestUtils::mockSchemaWithMultiVersionsMan();
+    LOG(INFO) << "Build EdgePropRequest...";
+    cpp2::VertexPropRequest req;
+    buildRequest(req);
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
+
+    {
+        LOG(INFO) << "Prepare data...";
+        mockDataMultiVersions(kv.get(), schemaMng.get(), 4);
+        LOG(INFO) << "Test QueryEdgePropsRequest...";
+        auto* processor = QueryVertexPropsProcessor::instance(
+            kv.get(), schemaMng.get(), nullptr, executor.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        LOG(INFO) << "Check the results...";
+        EXPECT_EQ(0, resp.result.failed_codes.size());
+        for (auto& vertex : resp.vertices) {
+            EXPECT_EQ(0, vertex.get_tag_data().size());
+        }
+    }
+
+    {
+        LOG(INFO) << "Prepare data...";
+        mockDataMultiVersions(kv.get(), schemaMng.get(), 3);
+        LOG(INFO) << "Test QueryEdgePropsRequest...";
+        auto* processor = QueryVertexPropsProcessor::instance(
+            kv.get(), schemaMng.get(), nullptr, executor.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        LOG(INFO) << "Check the results...";
+        EXPECT_EQ(0, resp.result.failed_codes.size());
+        for (auto& vertex : resp.vertices) {
+            EXPECT_NE(0, vertex.get_tag_data().size());
+        }
+    }
 }
 
 TEST(QueryVertexPropsTest, QueryAfterTagAltered) {

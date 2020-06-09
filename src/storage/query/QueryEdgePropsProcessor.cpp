@@ -32,6 +32,12 @@ kvstore::ResultCode QueryEdgePropsProcessor::collectEdgesProps(
         VLOG(3) << "Schema not found for edge type: " << edgeKey.edge_type;
         return kvstore::ResultCode::ERR_EDGE_NOT_FOUND;
     }
+    while (iter && iter->valid() &&
+           !multiVersionsCheck(iter->key())) {
+        VLOG(3) << "Only get the active version for each edge.";
+        iter->next();
+    }
+
     auto retTTLOpt = getEdgeTTLInfo(edgeKey.edge_type);
     // Only use the latest version.
     if (iter && iter->valid()) {

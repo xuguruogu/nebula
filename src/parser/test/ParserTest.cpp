@@ -274,6 +274,30 @@ TEST(Parser, TagOperation) {
     }
     {
         GQLParser parser;
+        std::string query = "ALTER TAG man active_version = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER TAG man max_version = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER TAG man reserve_versions = 200 100 300";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER TAG man reserve_versions = 200 100 300, active_version = 200, max_version = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
         std::string query = "DESCRIBE TAG person";
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();
@@ -365,6 +389,30 @@ TEST(Parser, EdgeOperation) {
     {
         GQLParser parser;
         std::string query = "ALTER EDGE woman ADD (col6 int)  ttl_duration = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER EDGE woman active_version = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER EDGE woman max_version = 200";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER EDGE woman reserve_versions = 200 100 300";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "ALTER EDGE woman reserve_versions = 200 100 300, active_version = 200, max_version = 200";
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();
     }

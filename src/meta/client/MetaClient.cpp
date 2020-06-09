@@ -280,6 +280,7 @@ bool MetaClient::loadSchemas(GraphSpaceID spaceId,
         }
         // handle schema property
         schema->setProp(tagIt.schema.get_schema_prop());
+        schema->setMultiVersions(tagIt.schema.get_multi_versions());
         tagSchemas.emplace(std::make_pair(tagIt.tag_id, tagIt.version), schema);
         tagNameIdMap.emplace(std::make_pair(spaceId, tagIt.tag_name), tagIt.tag_id);
         tagIdNameMap.emplace(std::make_pair(spaceId, tagIt.tag_id), tagIt.tag_name);
@@ -309,6 +310,7 @@ bool MetaClient::loadSchemas(GraphSpaceID spaceId,
         }
         // handle shcem property
         schema->setProp(edgeIt.schema.get_schema_prop());
+        schema->setMultiVersions(edgeIt.schema.get_multi_versions());
         edgeSchemas.emplace(std::make_pair(edgeIt.edge_type, edgeIt.version), schema);
         edgeNameTypeMap.emplace(std::make_pair(spaceId, edgeIt.edge_name), edgeIt.edge_type);
         edgeTypeNameMap.emplace(std::make_pair(spaceId, edgeIt.edge_type), edgeIt.edge_name);
@@ -1092,12 +1094,26 @@ folly::Future<StatusOr<TagID>>
 MetaClient::alterTagSchema(GraphSpaceID spaceId,
                            std::string name,
                            std::vector<cpp2::AlterSchemaItem> items,
-                           nebula::cpp2::SchemaProp schemaProp) {
+                           nebula::cpp2::SchemaProp schemaProp,
+                           std::unique_ptr<int64_t> schemaActiveVersion,
+                           std::unique_ptr<int64_t> schemaMaxVersion,
+                           std::unique_ptr<std::vector<int64_t>> schemaReserveVersions) {
     cpp2::AlterTagReq req;
     req.set_space_id(spaceId);
     req.set_tag_name(std::move(name));
     req.set_tag_items(std::move(items));
     req.set_schema_prop(std::move(schemaProp));
+    nebula::cpp2::MultiVersions multiVersions;
+    if (schemaActiveVersion) {
+        multiVersions.set_active_version(*schemaActiveVersion);
+    }
+    if (schemaMaxVersion) {
+        multiVersions.set_max_version(*schemaMaxVersion);
+    }
+    if (schemaReserveVersions) {
+        multiVersions.set_reserve_verions(*schemaReserveVersions);
+    }
+    req.set_multi_versions(multiVersions);
     folly::Promise<StatusOr<TagID>> promise;
     auto future = promise.getFuture();
     getResponse(std::move(req), [] (auto client, auto request) {
@@ -1182,12 +1198,26 @@ folly::Future<StatusOr<bool>>
 MetaClient::alterEdgeSchema(GraphSpaceID spaceId,
                             std::string name,
                             std::vector<cpp2::AlterSchemaItem> items,
-                            nebula::cpp2::SchemaProp schemaProp) {
+                            nebula::cpp2::SchemaProp schemaProp,
+                            std::unique_ptr<int64_t> schemaActiveVersion,
+                            std::unique_ptr<int64_t> schemaMaxVersion,
+                            std::unique_ptr<std::vector<int64_t>> schemaReserveVersions) {
     cpp2::AlterEdgeReq req;
     req.set_space_id(spaceId);
     req.set_edge_name(std::move(name));
     req.set_edge_items(std::move(items));
     req.set_schema_prop(std::move(schemaProp));
+    nebula::cpp2::MultiVersions multiVersions;
+    if (schemaActiveVersion) {
+        multiVersions.set_active_version(*schemaActiveVersion);
+    }
+    if (schemaMaxVersion) {
+        multiVersions.set_max_version(*schemaMaxVersion);
+    }
+    if (schemaReserveVersions) {
+        multiVersions.set_reserve_verions(*schemaReserveVersions);
+    }
+    req.set_multi_versions(multiVersions);
     folly::Promise<StatusOr<bool>> promise;
     auto future = promise.getFuture();
     getResponse(std::move(req), [] (auto client, auto request) {

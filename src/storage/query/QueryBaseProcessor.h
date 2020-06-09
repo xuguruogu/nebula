@@ -116,12 +116,19 @@ protected:
 
     bool checkExp(const Expression* exp);
 
-    void buildTTLInfoAndRespSchema();
+    void buildTTLInfoAndRespSchemaAndMultiVersions();
 
     folly::Optional<std::pair<std::string, int64_t>> getTagTTLInfo(TagID tagId);
 
     folly::Optional<std::pair<std::string, int64_t>> getEdgeTTLInfo(EdgeType edgeType);
 
+    folly::Optional<int64_t> getTagActiveVersionsInfo(TagID tagId);
+    folly::Optional<int64_t> getTagMaxVersionsInfo(TagID tagId);
+
+    folly::Optional<int64_t> getEdgeActiveVersionsInfo(EdgeType edgeType);
+    folly::Optional<int64_t> getEdgeMaxVersionsInfo(EdgeType edgeType);
+
+    bool multiVersionsCheck(folly::StringPiece key);
 protected:
     GraphSpaceID  spaceId_;
     std::unique_ptr<ExpressionContext> expCtx_;
@@ -145,6 +152,12 @@ protected:
     std::unordered_map<EdgeType, std::pair<std::string, int64_t>> edgeTTLInfo_;
 
     std::unordered_map<TagID, std::pair<std::string, int64_t>> tagTTLInfo_;
+
+    std::unordered_map<EdgeType, int64_t> edgeActiveVersionsInfo_;
+    std::unordered_map<EdgeType, int64_t> edgeMaxVersionsInfo_;
+
+    std::unordered_map<TagID, int64_t> tagActiveVersionsInfo_;
+    std::unordered_map<TagID, int64_t> tagMaxVersionsInfo_;
 };
 
 }  // namespace storage

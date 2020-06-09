@@ -47,7 +47,7 @@ public:
                 VLOG(3) << "TTL invalid for key " << key;
                 return true;
             }
-            if (filterVersions(key)) {
+            if (filterVersions(spaceId, key)) {
                 VLOG(3) << "Extra versions has been filtered!";
                 return true;
             }
@@ -151,8 +151,100 @@ public:
         return !nebula::storage::checkDataExpiredForTTL(schema, reader, ttlCol, ttlDuration);
     }
 
-    bool filterVersions(const folly::StringPiece& key) const {
+    bool filterVersions(GraphSpaceID spaceId, const folly::StringPiece& key) const {
         folly::StringPiece keyWithNoVersion = NebulaKeyUtils::keyWithNoVersion(key);
+        int64_t version = NebulaKeyUtils::getVersionBigEndian(key);
+
+        if (NebulaKeyUtils::isVertex(key)) {
+            auto tagId = NebulaKeyUtils::getTagId(key);
+            auto schema = this->schemaMan_->getTagSchema(spaceId, tagId);
+            if (!schema) {
+                VLOG(3) << "Space " << spaceId << ", Tag " << tagId << " invalid";
+                return true;
+            }
+            auto nschema = dynamic_cast<const meta::NebulaSchemaProvider*>(schema.get());
+            if (nschema == NULL) {
+                VLOG(3) << "Space " << spaceId << ", Tag " << tagId << " invalid";
+                return true;
+            }
+            const nebula::cpp2::MultiVersions& multi_versions = nschema->getMultiVersions();
+            if (multi_versions.__isset.reserve_verions ||
+                multi_versions.__isset.active_version ||
+                multi_versions.__isset.max_version) {
+                VLOG(5) << "Multi version try filter: Space " << spaceId << ", Tag " << tagId
+                        << " part " << NebulaKeyUtils::getPart(key)
+                        << " vId " << NebulaKeyUtils::getVertexId(key)
+                        << " version " << version;
+                if (
+                    // match reserve versions.
+                    (multi_versions.__isset.reserve_verions &&
+                     (multi_versions.get_reserve_verions()->empty() ||
+                      std::find(
+                          multi_versions.get_reserve_verions()->begin(),
+                          multi_versions.get_reserve_verions()->end(),
+                          version
+                      ) != multi_versions.get_reserve_verions()->end()))
+                    // match active version.
+                    || (multi_versions.__isset.active_version &&
+                        version == *multi_versions.get_active_version())
+                    // match max_version and keep min version.
+                    || (multi_versions.__isset.max_version &&
+                        version <= *multi_versions.get_max_version() &&
+                        keyWithNoVersion != lastKeyWithNoVersion_)
+                    ) {
+                    // keep
+                    lastKeyWithNoVersion_ = keyWithNoVersion.str();
+                    return false;
+                }
+                return true;
+            }
+        } else if (NebulaKeyUtils::isEdge(key)) {
+            auto edgeType = NebulaKeyUtils::getEdgeType(key);
+            auto schema = this->schemaMan_->getEdgeSchema(spaceId, std::abs(edgeType));
+            if (!schema) {
+                VLOG(3) << "Space " << spaceId << ", EdgeType " << edgeType << " invalid";
+                return true;
+            }
+            auto nschema = dynamic_cast<const meta::NebulaSchemaProvider*>(schema.get());
+            if (nschema == NULL) {
+                VLOG(3) << "Space " << spaceId << ", EdgeType " << edgeType << " invalid";
+                return true;
+            }
+            const nebula::cpp2::MultiVersions& multi_versions = nschema->getMultiVersions();
+            if (multi_versions.__isset.reserve_verions ||
+                multi_versions.__isset.active_version ||
+                multi_versions.__isset.max_version) {
+                VLOG(5) << "Multi version try filter: Space " << spaceId << ", EdgeType " << edgeType
+                        << " part " << NebulaKeyUtils::getPart(key)
+                        << " srcId " << NebulaKeyUtils::getSrcId(key)
+                        << " rank " << NebulaKeyUtils::getRank(key)
+                        << " dstId " << NebulaKeyUtils::getDstId(key)
+                        << " version " << version;
+                if (
+                    // match reserve versions.
+                    (multi_versions.__isset.reserve_verions &&
+                     (multi_versions.get_reserve_verions()->empty() ||
+                      std::find(
+                          multi_versions.get_reserve_verions()->begin(),
+                          multi_versions.get_reserve_verions()->end(),
+                          version
+                      ) != multi_versions.get_reserve_verions()->end()))
+                    // match active version.
+                    || (multi_versions.__isset.active_version &&
+                        version == *multi_versions.get_active_version())
+                    // match max_version and keep min version.
+                    || (multi_versions.__isset.max_version &&
+                        version <= *multi_versions.get_max_version() &&
+                        keyWithNoVersion != lastKeyWithNoVersion_)
+                    ) {
+                    // keep
+                    lastKeyWithNoVersion_ = keyWithNoVersion.str();
+                    return false;
+                }
+                return true;
+            }
+        }
+
         if (keyWithNoVersion == lastKeyWithNoVersion_) {
             // TODO(heng): we could support max-versions configuration in schema if needed.
             return true;

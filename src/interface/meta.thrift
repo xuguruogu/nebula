@@ -244,6 +244,7 @@ struct AlterTagReq {
     2: string                   tag_name,
     3: list<AlterSchemaItem>    tag_items,
     4: common.SchemaProp        schema_prop,
+    5: common.MultiVersions     multi_versions,
 }
 
 struct DropTagReq {
@@ -288,6 +289,7 @@ struct AlterEdgeReq {
     2: string                   edge_name,
     3: list<AlterSchemaItem>    edge_items,
     4: common.SchemaProp        schema_prop,
+    5: common.MultiVersions     multi_versions,
 }
 
 struct GetEdgeReq {

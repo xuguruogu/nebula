@@ -358,7 +358,7 @@ void ShowExecutor::showTags() {
         auto value = std::move(resp).value();
         resp_ = std::make_unique<cpp2::ExecutionResponse>();
         std::vector<cpp2::RowValue> rows;
-        std::vector<std::string> header{"ID", "Name"};
+        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion"};
         resp_->set_column_names(std::move(header));
 
         for (auto &tag : value) {
@@ -370,9 +370,26 @@ void ShowExecutor::showTags() {
 
             tags.emplace(tagID);
             std::vector<cpp2::ColumnValue> row;
-            row.resize(2);
+            row.resize(6);
             row[0].set_integer(tagID);
             row[1].set_str(std::move(tag.get_tag_name()));
+            row[2].set_integer(tag.get_version());
+            nebula::cpp2::MultiVersions multi_versions = tag.get_schema().get_multi_versions();
+            if (multi_versions.__isset.active_version) {
+                row[3].set_str(folly::to<std::string>(*multi_versions.get_active_version()));
+            } else {
+                row[3].set_str("<null>");
+            }
+            if (multi_versions.__isset.reserve_verions) {
+                row[4].set_str(folly::join(" ", *multi_versions.get_reserve_verions()));
+            } else {
+                row[4].set_str("<null>");
+            }
+            if (multi_versions.__isset.max_version) {
+                row[5].set_str(folly::to<std::string>(*multi_versions.get_max_version()));
+            } else {
+                row[5].set_str("<null>");
+            }
             rows.emplace_back();
             rows.back().set_columns(std::move(row));
         }
@@ -405,7 +422,7 @@ void ShowExecutor::showEdges() {
         auto value = std::move(resp).value();
         resp_ = std::make_unique<cpp2::ExecutionResponse>();
         std::vector<cpp2::RowValue> rows;
-        std::vector<std::string> header{"ID", "Name"};
+        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion"};
         resp_->set_column_names(std::move(header));
 
         for (auto &edge : value) {
@@ -417,9 +434,26 @@ void ShowExecutor::showEdges() {
 
             edges.emplace(edgeType);
             std::vector<cpp2::ColumnValue> row;
-            row.resize(2);
+            row.resize(6);
             row[0].set_integer(edge.get_edge_type());
             row[1].set_str(std::move(edge.get_edge_name()));
+            row[2].set_integer(edge.get_version());
+            nebula::cpp2::MultiVersions multi_versions = edge.get_schema().get_multi_versions();
+            if (multi_versions.__isset.active_version) {
+                row[3].set_str(folly::to<std::string>(*multi_versions.get_active_version()));
+            } else {
+                row[3].set_str("<null>");
+            }
+            if (multi_versions.__isset.reserve_verions) {
+                row[4].set_str(folly::join(" ", *multi_versions.get_reserve_verions()));
+            } else {
+                row[4].set_str("<null>");
+            }
+            if (multi_versions.__isset.max_version) {
+                row[5].set_str(folly::to<std::string>(*multi_versions.get_max_version()));
+            } else {
+                row[5].set_str("<null>");
+            }
             rows.emplace_back();
             rows.back().set_columns(std::move(row));
         }

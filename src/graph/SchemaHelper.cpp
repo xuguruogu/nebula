@@ -203,9 +203,14 @@ Status SchemaHelper::setTTLCol(SchemaPropItem* schemaProp, nebula::cpp2::Schema&
 // static
 Status SchemaHelper::alterSchema(const std::vector<AlterSchemaOptItem*>& schemaOpts,
                                  const std::vector<SchemaPropItem*>& schemaProps,
+                                 const std::unique_ptr<int64_t>& schemaActiveVersion,
+                                 const std::unique_ptr<int64_t>& schemaMaxVersion,
+                                 const std::unique_ptr<std::vector<int64_t>>& schemaReserveVersions,
                                  std::vector<nebula::meta::cpp2::AlterSchemaItem>& options,
-                                 nebula::cpp2::SchemaProp& prop) {
-    Getters g;
+                                 nebula::cpp2::SchemaProp& prop,
+                                 std::unique_ptr<int64_t>& activeVersion,
+                                 std::unique_ptr<int64_t>& maxVersion,
+                                 std::unique_ptr<std::vector<int64_t>>& reserveVersions) {
     for (auto& schemaOpt : schemaOpts) {
         nebula::meta::cpp2::AlterSchemaItem schemaItem;
         auto opType = schemaOpt->toType();
@@ -265,6 +270,20 @@ Status SchemaHelper::alterSchema(const std::vector<AlterSchemaOptItem*>& schemaO
                 return Status::Error("Property type not support");
         }
     }
+
+    if (schemaActiveVersion) {
+        activeVersion = std::make_unique<int64_t>(*schemaActiveVersion);
+    }
+    if (schemaMaxVersion) {
+        maxVersion = std::make_unique<int64_t>(*schemaMaxVersion);
+    }
+    if (schemaReserveVersions) {
+        reserveVersions = std::make_unique<std::vector<int64_t>>();
+        for (auto version : *schemaReserveVersions) {
+            reserveVersions->push_back(version);
+        }
+    }
+
     return Status::OK();
 }
 }   // namespace graph

@@ -1473,6 +1473,50 @@ TEST(ProcessorTest, AlterTagTest) {
         auto resp = std::move(f).get();
         ASSERT_EQ(cpp2::ErrorCode::E_NOT_FOUND, resp.get_code());
     }
+    // Alter tag with multi versions
+    {
+        cpp2::AlterTagReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(2);
+
+        req.set_space_id(1);
+        req.set_tag_name("tag_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterTagProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
+    }
+    {
+        cpp2::AlterTagReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(2);
+        multiVersions.set_reserve_verions({0, 1, 2});
+
+        req.set_space_id(1);
+        req.set_tag_name("tag_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterTagProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
+    }
+    {
+        cpp2::AlterTagReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_max_version(2);
+
+        req.set_space_id(1);
+        req.set_tag_name("tag_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterTagProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
+    }
 }
 
 
@@ -1894,6 +1938,50 @@ TEST(ProcessorTest, AlterEdgeTest) {
         processor->process(req);
         auto resp = std::move(f).get();
         ASSERT_EQ(cpp2::ErrorCode::E_NOT_FOUND, resp.get_code());
+    }
+    // Only set active_version
+    {
+        cpp2::AlterEdgeReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(2);
+
+        req.set_space_id(1);
+        req.set_edge_name("edge_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterEdgeProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
+    }
+    {
+        cpp2::AlterEdgeReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(2);
+        multiVersions.set_reserve_verions({0, 1, 2});
+
+        req.set_space_id(1);
+        req.set_edge_name("edge_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterEdgeProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
+    }
+    {
+        cpp2::AlterEdgeReq req;
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_max_version(2);
+
+        req.set_space_id(1);
+        req.set_edge_name("edge_0");
+        req.set_multi_versions(std::move(multiVersions));
+        auto* processor = AlterEdgeProcessor::instance(kv.get());
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, resp.get_code());
     }
 }
 

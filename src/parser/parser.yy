@@ -79,6 +79,8 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
     nebula::AclItemClause                  *acl_item_clause;
     nebula::SchemaPropList                 *create_schema_prop_list;
     nebula::SchemaPropItem                 *create_schema_prop_item;
+    nebula::SchemaMultiVersions            *schema_multi_versions;
+    nebula::SchemaMultiVersions            *schema_multi_versions_item;
     nebula::SchemaPropList                 *alter_schema_prop_list;
     nebula::SchemaPropItem                 *alter_schema_prop_item;
     nebula::OrderFactor                    *order_factor;
@@ -92,6 +94,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
     nebula::HostList                       *host_list;
     nebula::HostAddr                       *host_item;
     std::vector<int32_t>                   *integer_list;
+    std::vector<int64_t>                   *version_list;
 }
 
 /* destructors */
@@ -112,6 +115,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %token KW_BY KW_DOWNLOAD KW_HDFS KW_UUID KW_CONFIGS KW_FORCE KW_STATUS
 %token KW_GET KW_DECLARE KW_GRAPH KW_META KW_STORAGE
 %token KW_TTL KW_TTL_DURATION KW_TTL_COL KW_DATA KW_STOP
+%token KW_ACTIVE_VERSION KW_MAX_VERSION KW_MIN_VERSION KW_LATEST_SECONDS KW_RESERVE_VERSIONS
 %token KW_FETCH KW_PROP KW_UPDATE KW_UPSERT KW_WHEN
 %token KW_ORDER KW_ASC KW_LIMIT KW_OFFSET KW_GROUP
 %token KW_DISTINCT KW_ALL KW_OF
@@ -181,6 +185,8 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <alter_schema_opt_item> alter_schema_opt_item
 %type <create_schema_prop_list> create_schema_prop_list opt_create_schema_prop_list
 %type <create_schema_prop_item> create_schema_prop_item
+%type <schema_multi_versions> schema_multi_versions
+%type <schema_multi_versions_item> schema_multi_versions_item
 %type <alter_schema_prop_list> alter_schema_prop_list
 %type <alter_schema_prop_item> alter_schema_prop_item
 %type <order_factor> order_factor
@@ -196,6 +202,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <host_list> host_list
 %type <host_item> host_item
 %type <integer_list> integer_list
+%type <version_list> version_list
 
 %type <intval> unary_integer rank port
 
@@ -301,6 +308,9 @@ unreserved_keyword
      | KW_COLLATION          { $$ = new std::string("collation"); }
      | KW_TTL_DURATION       { $$ = new std::string("ttl_duration"); }
      | KW_TTL_COL            { $$ = new std::string("ttl_col"); }
+     | KW_ACTIVE_VERSION     { $$ = new std::string("active_version"); }
+     | KW_MAX_VERSION        { $$ = new std::string("max_version"); }
+     | KW_RESERVE_VERSIONS   { $$ = new std::string("reserve_versions"); }
      | KW_SNAPSHOT           { $$ = new std::string("snapshot"); }
      | KW_SNAPSHOTS          { $$ = new std::string("snapshots"); }
      | KW_GRAPH              { $$ = new std::string("graph"); }
@@ -1056,13 +1066,16 @@ create_tag_sentence
 
 alter_tag_sentence
     : KW_ALTER KW_TAG name_label alter_schema_opt_list {
-        $$ = new AlterTagSentence($3, $4, new SchemaPropList());
+        $$ = new AlterTagSentence($3, $4, new SchemaPropList(), new SchemaMultiVersions());
     }
     | KW_ALTER KW_TAG name_label alter_schema_prop_list {
-        $$ = new AlterTagSentence($3, new AlterSchemaOptList(), $4);
+        $$ = new AlterTagSentence($3, new AlterSchemaOptList(), $4, new SchemaMultiVersions());
     }
     | KW_ALTER KW_TAG name_label alter_schema_opt_list alter_schema_prop_list {
-        $$ = new AlterTagSentence($3, $4, $5);
+        $$ = new AlterTagSentence($3, $4, $5, new SchemaMultiVersions());
+    }
+    | KW_ALTER KW_TAG name_label schema_multi_versions {
+        $$ = new AlterTagSentence($3, new AlterSchemaOptList(), new SchemaPropList(), $4);
     }
     ;
 
@@ -1132,15 +1145,58 @@ create_edge_sentence
     }
     ;
 
+schema_multi_versions
+    : schema_multi_versions_item {
+        $$ = $1;
+    }
+    | schema_multi_versions COMMA schema_multi_versions_item {
+        $$ = $1;
+        $$->add(*$3);
+        delete $3;
+    }
+    ;
+
+version_list
+    : INTEGER {
+        $$ = new std::vector<int64_t>();
+        $$->emplace_back($1);
+    }
+    | version_list INTEGER {
+        $$ = $1;
+        $$->emplace_back($2);
+    }
+    ;
+
+schema_multi_versions_item
+    : KW_ACTIVE_VERSION ASSIGN INTEGER {
+        ifOutOfRange($3, @3);
+        $$ = new SchemaMultiVersions();
+        $$->setActiveVersion($3);
+    }
+    | KW_MAX_VERSION ASSIGN INTEGER {
+        ifOutOfRange($3, @3);
+        $$ = new SchemaMultiVersions();
+        $$->setMaxVersion($3);
+    }
+    | KW_RESERVE_VERSIONS ASSIGN version_list {
+        $$ = new SchemaMultiVersions();
+        $$->addReserveVersions(*$3);
+        delete $3;
+    }
+    ;
+
 alter_edge_sentence
     : KW_ALTER KW_EDGE name_label alter_schema_opt_list {
-        $$ = new AlterEdgeSentence($3, $4, new SchemaPropList());
+        $$ = new AlterEdgeSentence($3, $4, new SchemaPropList(), new SchemaMultiVersions());
     }
     | KW_ALTER KW_EDGE name_label alter_schema_prop_list {
-        $$ = new AlterEdgeSentence($3, new AlterSchemaOptList(), $4);
+        $$ = new AlterEdgeSentence($3, new AlterSchemaOptList(), $4, new SchemaMultiVersions());
     }
     | KW_ALTER KW_EDGE name_label alter_schema_opt_list alter_schema_prop_list {
-        $$ = new AlterEdgeSentence($3, $4, $5);
+        $$ = new AlterEdgeSentence($3, $4, $5, new SchemaMultiVersions());
+    }
+    | KW_ALTER KW_EDGE name_label schema_multi_versions {
+        $$ = new AlterEdgeSentence($3, new AlterSchemaOptList(), new SchemaPropList(), $4);
     }
     ;
 

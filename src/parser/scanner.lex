@@ -107,6 +107,11 @@ BY                          ([Bb][Yy])
 IN                          ([Ii][Nn])
 TTL_DURATION                ([Tt][Tt][Ll][_][Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])
 TTL_COL                     ([Tt][Tt][Ll][_][Cc][Oo][Ll])
+ACTIVE_VERSION              ([Aa][Cc][Tt][Ii][Vv][Ee][_][Vv][Ee][Rr][Ss][Ii][Oo][Nn])
+MAX_VERSION                 ([Mm][Aa][Xx][_][Vv][Ee][Rr][Ss][Ii][Oo][Nn])
+MIN_VERSION                 ([Mm][Ii][Nn][_][Vv][Ee][Rr][Ss][Ii][Oo][Nn])
+LATEST_SECONDS              ([Ll][Aa][Tt][Ee][Ss][Tt][_][Ss][Ee][Cc][Oo][Nn][Dd][Ss])
+RESERVE_VERSIONS            ([Rr][Ee][Ss][Ee][Rr][Vv][Ee][_][Vv][Ee][Rr][Ss][Ii][Oo][Nn][Ss])
 DOWNLOAD                    ([Dd][Oo][Ww][Nn][Ll][Oo][Aa][Dd])
 HDFS                        ([Hh][Dd][Ff][Ss])
 ORDER                       ([Oo][Rr][Dd][Ee][Rr])
@@ -303,6 +308,11 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {CONFIGS}                   { return TokenType::KW_CONFIGS; }
 {TTL_DURATION}              { return TokenType::KW_TTL_DURATION; }
 {TTL_COL}                   { return TokenType::KW_TTL_COL; }
+{ACTIVE_VERSION}            { return TokenType::KW_ACTIVE_VERSION; }
+{MAX_VERSION}               { return TokenType::KW_MAX_VERSION; }
+{MIN_VERSION}               { return TokenType::KW_MIN_VERSION; }
+{LATEST_SECONDS}            { return TokenType::KW_LATEST_SECONDS; }
+{RESERVE_VERSIONS}          { return TokenType::KW_RESERVE_VERSIONS; }
 {GRAPH}                     { return TokenType::KW_GRAPH; }
 {META}                      { return TokenType::KW_META; }
 {STORAGE}                   { return TokenType::KW_STORAGE; }

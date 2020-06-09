@@ -33,7 +33,7 @@ void AddEdgesProcessor::process(const cpp2::AddEdgesRequest& req) {
                 VLOG(3) << "PartitionID: " << partId << ", VertexID: " << edge.key.src
                         << ", EdgeType: " << edge.key.edge_type << ", EdgeRanking: "
                         << edge.key.ranking << ", VertexID: "
-                        << edge.key.dst << ", EdgeVersion: " << version;
+                        << edge.key.dst << ", EdgeVersion: " << folly::Endian::big(version);
                 auto key = NebulaKeyUtils::edgeKey(partId, edge.key.src, edge.key.edge_type,
                                                    edge.key.ranking, edge.key.dst, version);
                 data.emplace_back(std::move(key), std::move(edge.get_props()));
@@ -81,7 +81,7 @@ std::string AddEdgesProcessor::addEdges(int64_t version, PartitionID partId,
         auto dstId = edge.key.dst;
         VLOG(3) << "PartitionID: " << partId << ", VertexID: " << srcId
                 << ", EdgeType: " << type << ", EdgeRanking: " << rank
-                << ", VertexID: " << dstId << ", EdgeVersion: " << version;
+                << ", VertexID: " << dstId << ", EdgeVersion: " << folly::Endian::big(version);
         auto key = NebulaKeyUtils::edgeKey(partId, srcId, type, rank, dstId, version);
         newEdges[key] = std::move(prop);
     });

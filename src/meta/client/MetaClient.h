@@ -236,9 +236,12 @@ public:
 
     folly::Future<StatusOr<TagID>>
     alterTagSchema(GraphSpaceID spaceId,
-                   std::string name,
-                   std::vector<cpp2::AlterSchemaItem> items,
-                   nebula::cpp2::SchemaProp schemaProp);
+                    std::string name,
+                    std::vector<cpp2::AlterSchemaItem> items,
+                    nebula::cpp2::SchemaProp schemaProp,
+                    std::unique_ptr<int64_t> schemaActiveVersion,
+                    std::unique_ptr<int64_t> schemaMaxVersion,
+                    std::unique_ptr<std::vector<int64_t>> schemaReserveVersions);
 
     folly::Future<StatusOr<std::vector<cpp2::TagItem>>>
     listTagSchemas(GraphSpaceID spaceId);
@@ -259,7 +262,10 @@ public:
     alterEdgeSchema(GraphSpaceID spaceId,
                     std::string name,
                     std::vector<cpp2::AlterSchemaItem> items,
-                    nebula::cpp2::SchemaProp schemaProp);
+                    nebula::cpp2::SchemaProp schemaProp,
+                    std::unique_ptr<int64_t> schemaActiveVersion,
+                    std::unique_ptr<int64_t> schemaMaxVersion,
+                    std::unique_ptr<std::vector<int64_t>> schemaReserveVersions);
 
     folly::Future<StatusOr<std::vector<cpp2::EdgeItem>>>
     listEdgeSchemas(GraphSpaceID spaceId);

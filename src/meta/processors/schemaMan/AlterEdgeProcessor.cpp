@@ -35,10 +35,25 @@ void AlterEdgeProcessor::process(const cpp2::AlterEdgeReq& req) {
     }
 
     // Get lasted version of edge
-    auto version = MetaServiceUtils::parseEdgeVersion(iter->key()) + 1;
+    auto version = MetaServiceUtils::parseEdgeVersion(iter->key());
     auto schema = MetaServiceUtils::parseSchema(iter->val());
     auto columns = schema.get_columns();
     auto prop = schema.get_schema_prop();
+    auto multi_versions = schema.get_multi_versions();
+    if (req.get_multi_versions().__isset.active_version) {
+        multi_versions.set_active_version(*req.get_multi_versions().get_active_version());
+    }
+    if (req.get_multi_versions().__isset.max_version) {
+        multi_versions.set_max_version(*req.get_multi_versions().get_max_version());
+    }
+    if (req.get_multi_versions().__isset.reserve_verions) {
+        multi_versions.set_reserve_verions(*req.get_multi_versions().get_reserve_verions());
+    }
+    if (!req.get_edge_items().empty() ||
+        req.get_schema_prop().__isset.ttl_col ||
+        req.get_schema_prop().__isset.ttl_duration) {
+        version++;
+    }
 
     // Update schema column
     auto& edgeItems = req.get_edge_items();
@@ -90,6 +105,7 @@ void AlterEdgeProcessor::process(const cpp2::AlterEdgeReq& req) {
         schema.set_schema_prop(std::move(prop));
     }
     schema.set_columns(std::move(columns));
+    schema.set_multi_versions(std::move(multi_versions));
 
     LOG(INFO) << "Alter edge " << req.get_edge_name() << ", edgeType " << edgeType;
     data.emplace_back(MetaServiceUtils::schemaEdgeKey(spaceId, edgeType, version),

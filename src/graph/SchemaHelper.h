@@ -32,8 +32,14 @@ public:
 
     static Status alterSchema(const std::vector<AlterSchemaOptItem*>& schemaOpts,
                               const std::vector<SchemaPropItem*>& schemaProps,
+                              const std::unique_ptr<int64_t>& schemaActiveVersion,
+                              const std::unique_ptr<int64_t>& schemaMaxVersion,
+                              const std::unique_ptr<std::vector<int64_t>>& schemaReserveVersions,
                               std::vector<nebula::meta::cpp2::AlterSchemaItem>& options,
-                              nebula::cpp2::SchemaProp& schemaProp);
+                              nebula::cpp2::SchemaProp& prop,
+                              std::unique_ptr<int64_t>& activeVersion,
+                              std::unique_ptr<int64_t>& maxVersion,
+                              std::unique_ptr<std::vector<int64_t>>& reserveVersions);
 
     static nebula::cpp2::SupportedType columnTypeToSupportedType(nebula::ColumnType type);
 

@@ -115,13 +115,25 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
         if (!NebulaKeyUtils::isVertex(key)) {
             continue;
         }
-        missedKey = false;
         auto ver = RowReader::getSchemaVer(val);
         if (ver < 0) {
             LOG(ERROR) << "Found schema version negative " << ver;
             continue;
         }
         auto tagId = NebulaKeyUtils::getTagId(key);
+        auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
+        if (schema == nullptr) {
+            // Ignore the bad data.
+            VLOG(3) << "Schema not found for tag id: " << tagId;
+            continue;
+        }
+        // Check if ttl data expired
+        if (!multiVersionsCheck(key)) {
+            VLOG(3) << "Only get the active version for each tag.";
+            continue;
+        }
+
+        missedKey = false;
         auto result = tagIds.emplace(tagId);
         if (!result.second) {
             // Already found the latest version.
@@ -129,12 +141,6 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
         }
         VLOG(3) << "Found tag " << tagId << " for vId" << vId;
 
-        auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
-        if (schema == nullptr) {
-            // Ignore the bad data.
-            VLOG(3) << "Schema not found for tag id: " << tagId;
-            continue;
-        }
         auto reader = RowReader::getTagPropReader(this->schemaMan_, val, spaceId_, tagId);
         if (reader == nullptr) {
             VLOG(3) << "Skip the bad format row!";

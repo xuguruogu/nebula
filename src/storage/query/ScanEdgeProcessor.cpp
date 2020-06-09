@@ -65,7 +65,7 @@ void ScanEdgeProcessor::process(const cpp2::ScanEdgeRequest& req) {
         }
 
         // only return data within time range [start, end)
-        EdgeVersion version = folly::Endian::big(NebulaKeyUtils::getVersion(key));
+        EdgeVersion version = NebulaKeyUtils::getVersionBigEndian(key);
         int64_t ts = std::numeric_limits<int64_t>::max() - version;
         if (ts < startTime || ts >= endTime) {
             continue;

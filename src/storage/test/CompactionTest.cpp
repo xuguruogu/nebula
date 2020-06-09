@@ -108,6 +108,38 @@ void mockTTLDataExpired(kvstore::KVStore* kv) {
     }
 }
 
+void mockMultiVersionsDataExpired(kvstore::KVStore* kv) {
+    for (PartitionID partId = 0; partId < 3; partId++) {
+        std::vector<kvstore::KV> data;
+        for (VertexID vertexId = partId * 10; vertexId < (partId + 1) * 10; vertexId++) {
+            for (EdgeVersion version = 0; version < 35; version++) {
+                auto key = NebulaKeyUtils::vertexKey(partId, vertexId, 3001, folly::Endian::big(version));
+                auto val = TestUtils::encodeValue(partId, vertexId, 3001);
+                data.emplace_back(std::move(key), std::move(val));
+            }
+
+            // Generate 7 out-edges for each edgeType.
+            for (VertexID dstId = 10001; dstId <= 10007; dstId++) {
+                VLOG(3) << "Write part " << partId << ", vertex " << vertexId << ", dst " << dstId;
+                for (EdgeVersion version = 0; version < 35; version++) {
+                    auto key = NebulaKeyUtils::edgeKey(partId, vertexId, 101, 0, dstId, folly::Endian::big(version));
+                    auto val = TestUtils::encodeValue(partId, vertexId, dstId, 101);
+                    data.emplace_back(std::move(key), std::move(val));
+                }
+            }
+        }
+
+        folly::Baton<true, std::atomic> baton;
+        kv->asyncMultiPut(
+            0, partId, std::move(data),
+            [&](kvstore::ResultCode code) {
+                EXPECT_EQ(code, kvstore::ResultCode::SUCCEEDED);
+                baton.post();
+            });
+        baton.wait();
+    }
+}
+
 void mockTTLDataNotExpired(kvstore::KVStore* kv) {
     auto tagId = 3001;
     auto edgeType = 101;
@@ -341,6 +373,63 @@ TEST(NebulaCompactionFilterTest, TTLFilterDataExpiredTest) {
         for (VertexID vertexId = partId * 10; vertexId < (partId + 1) * 10; vertexId++) {
             checkTag(partId, vertexId, 3001, 0);
             checkEdge(partId, vertexId, 101, 0, 10001, 0);
+        }
+    }
+}
+
+
+TEST(NebulaCompactionFilterTest, MultiVersionsFilterDataExpiredTest) {
+    fs::TempDir rootPath("/tmp/MultiVersionsFilterDataExpiredTest.XXXXXX");
+    auto schemaMan = TestUtils::mockSchemaWithMultiVersionsMan();
+    std::unique_ptr<kvstore::CompactionFilterFactoryBuilder> cffBuilder(
+        new StorageCompactionFilterFactoryBuilder(schemaMan.get(),
+                                                  nullptr));
+    std::unique_ptr<kvstore::KVStore> kv(TestUtils::initKV(rootPath.path(),
+                                                           6,
+                                                           {0, network::NetworkUtils::getAvailablePort()},
+                                                           nullptr,
+                                                           false,
+                                                           std::move(cffBuilder)));
+
+    LOG(INFO) << "Write some data";
+    mockMultiVersionsDataExpired(kv.get());
+
+    auto* ns = static_cast<kvstore::NebulaStore*>(kv.get());
+    ns->compact(0);
+    LOG(INFO) << "Finish compaction, check data...";
+
+    auto checkTag = [&](PartitionID partId, VertexID vertexId, TagID tagId, int32_t expectedNum) {
+        auto prefix = NebulaKeyUtils::vertexPrefix(partId, vertexId, tagId);
+        std::unique_ptr<kvstore::KVIterator> iter;
+        ASSERT_EQ(kvstore::ResultCode::SUCCEEDED, kv->prefix(0, partId, prefix, &iter));
+        int32_t num = 0;
+        while (iter->valid()) {
+            iter->next();
+            num++;
+        }
+        VLOG(3) << "Check tag " << partId << ":" << vertexId << ":" << tagId;
+        ASSERT_EQ(expectedNum, num);
+    };
+
+    auto checkEdge = [&](PartitionID partId, VertexID vertexId, EdgeType edge,
+                         EdgeRanking rank, VertexID dstId, int32_t expectedNum) {
+        auto prefix = NebulaKeyUtils::edgePrefix(partId, vertexId, edge, rank, dstId);
+        std::unique_ptr<kvstore::KVIterator> iter;
+        ASSERT_EQ(kvstore::ResultCode::SUCCEEDED, kv->prefix(0, partId, prefix, &iter));
+        int32_t num = 0;
+        while (iter->valid()) {
+            iter->next();
+            num++;
+        }
+        VLOG(3) << "Check edge " << partId << ":" << vertexId << ":"
+                << edge << ":" << rank << ":" << dstId;
+        ASSERT_EQ(expectedNum, num);
+    };
+
+    for (PartitionID partId = 0; partId < 3; partId++) {
+        for (VertexID vertexId = partId * 10; vertexId < (partId + 1) * 10; vertexId++) {
+            checkTag(partId, vertexId, 3001, 3);
+            checkEdge(partId, vertexId, 101, 0, 10001, 3);
         }
     }
 }

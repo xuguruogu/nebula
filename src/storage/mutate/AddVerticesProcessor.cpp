@@ -39,7 +39,7 @@ void AddVerticesProcessor::process(const cpp2::AddVerticesRequest& req) {
                 const auto& tags = v.get_tags();
                 std::for_each(tags.begin(), tags.end(), [&](auto& tag) {
                     VLOG(3) << "PartitionID: " << partId << ", VertexID: " << v.get_id()
-                            << ", TagID: " << tag.get_tag_id() << ", TagVersion: " << version;
+                            << ", TagID: " << tag.get_tag_id() << ", TagVersion: " << folly::Endian::big(version);
                     auto key = NebulaKeyUtils::vertexKey(partId, v.get_id(),
                                                          tag.get_tag_id(), version);
                     data.emplace_back(std::move(key), std::move(tag.get_props()));
@@ -91,7 +91,7 @@ std::string AddVerticesProcessor::addVertices(int64_t version, PartitionID partI
             auto tagId = tag.get_tag_id();
             auto prop = tag.get_props();
             VLOG(3) << "PartitionID: " << partId << ", VertexID: " << vId
-                    << ", TagID: " << tagId << ", TagVersion: " << version;
+                    << ", TagID: " << tagId << ", TagVersion: " << folly::Endian::big(version);
             auto key = NebulaKeyUtils::vertexKey(partId, vId, tagId, version);
             newVertices[key] = std::move(prop);
             if (FLAGS_enable_vertex_cache && this->vertexCache_ != nullptr) {

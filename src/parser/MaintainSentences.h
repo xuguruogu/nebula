@@ -349,14 +349,68 @@ private:
 };
 
 
+class SchemaMultiVersions final {
+public:
+    void setActiveVersion(int64_t version) {
+        active_version_ = std::make_unique<int64_t>(version);
+    }
+
+    void setMaxVersion(int64_t version) {
+        max_version_ = std::make_unique<int64_t>(version);
+    }
+
+    void addReserveVersions(const std::vector<int64_t>& versions) {
+        if (!reserve_versions_) {
+            reserve_versions_ = std::make_unique<std::vector<int64_t>>();
+        }
+        for (auto version : versions) {
+            reserve_versions_->push_back(version);
+        }
+    }
+
+    void add(const SchemaMultiVersions& item) {
+        if (item.getActiveVersion()) {
+            setActiveVersion(*item.getActiveVersion());
+        }
+        if (item.getMaxVersion()) {
+            setMaxVersion(*item.getMaxVersion());
+        }
+        if (item.getReserveVersions()) {
+            addReserveVersions(*item.getReserveVersions());
+        }
+    }
+
+    const std::unique_ptr<int64_t>& getActiveVersion() const {
+        return active_version_;
+    }
+
+    const std::unique_ptr<int64_t>& getMaxVersion() const {
+        return max_version_;
+    }
+
+    const std::unique_ptr<std::vector<int64_t>>& getReserveVersions() const {
+        return reserve_versions_;
+    }
+
+    std::string toString() const;
+
+private:
+    std::unique_ptr<int64_t> active_version_;
+    std::unique_ptr<int64_t> max_version_;
+    std::unique_ptr<std::vector<int64_t>> reserve_versions_;
+};
+
+
 class AlterTagSentence final : public Sentence {
 public:
     AlterTagSentence(std::string *name,
                      AlterSchemaOptList *opts,
-                     SchemaPropList *schemaProps) {
+                     SchemaPropList *schemaProps,
+                     SchemaMultiVersions *schemaMultiVersions) {
         name_.reset(name);
         opts_.reset(opts);
         schemaProps_.reset(schemaProps);
+        schema_multi_versions_.reset(schemaMultiVersions);
         kind_ = Kind::kAlterTag;
     }
 
@@ -374,10 +428,22 @@ public:
         return schemaProps_->getProps();
     }
 
+    const std::unique_ptr<int64_t>& getActiveVersion() const {
+        return schema_multi_versions_->getActiveVersion();
+    }
+
+    const std::unique_ptr<int64_t>& getMaxVersion() const {
+        return schema_multi_versions_->getMaxVersion();
+    }
+
+    const std::unique_ptr<std::vector<int64_t>>& getReserveVersions() const {
+        return schema_multi_versions_->getReserveVersions();
+    }
 private:
     std::unique_ptr<std::string>                name_;
     std::unique_ptr<AlterSchemaOptList>         opts_;
     std::unique_ptr<SchemaPropList>             schemaProps_;
+    std::unique_ptr<SchemaMultiVersions>        schema_multi_versions_;
 };
 
 
@@ -385,10 +451,12 @@ class AlterEdgeSentence final : public Sentence {
 public:
     AlterEdgeSentence(std::string *name,
                       AlterSchemaOptList *opts,
-                      SchemaPropList *schemaProps) {
+                      SchemaPropList *schemaProps,
+                      SchemaMultiVersions *schemaMultiVersions) {
         name_.reset(name);
         opts_.reset(opts);
         schemaProps_.reset(schemaProps);
+        schema_multi_versions_.reset(schemaMultiVersions);
         kind_ = Kind::kAlterEdge;
     }
 
@@ -406,10 +474,22 @@ public:
         return schemaProps_->getProps();
     }
 
+    const std::unique_ptr<int64_t>& getActiveVersion() const {
+        return schema_multi_versions_->getActiveVersion();
+    }
+
+    const std::unique_ptr<int64_t>& getMaxVersion() const {
+        return schema_multi_versions_->getMaxVersion();
+    }
+
+    const std::unique_ptr<std::vector<int64_t>>& getReserveVersions() const {
+        return schema_multi_versions_->getReserveVersions();
+    }
 private:
     std::unique_ptr<std::string>                name_;
     std::unique_ptr<AlterSchemaOptList>         opts_;
     std::unique_ptr<SchemaPropList>             schemaProps_;
+    std::unique_ptr<SchemaMultiVersions>        schema_multi_versions_;
 };
 
 

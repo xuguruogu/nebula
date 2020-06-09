@@ -46,6 +46,35 @@ void mockData(kvstore::KVStore* kv,
     }
 }
 
+void mockDataMultiVersions(kvstore::KVStore* kv,
+              meta::SchemaManager* schemaMng,
+              EdgeVersion version) {
+    auto edgeType = 101;
+    auto spaceId = 0;
+    auto schema = schemaMng->getEdgeSchema(spaceId, edgeType);
+    for (PartitionID partId = 0; partId < 3; partId++) {
+        std::vector<kvstore::KV> data;
+        for (VertexID vertexId = partId * 10; vertexId < (partId + 1) * 10; vertexId++) {
+            // Generate 7 edges for each source vertex id
+            for (VertexID dstId = 10001; dstId <= 10007; dstId++) {
+                VLOG(3) << "Write part " << partId << ", vertex " << vertexId << ", dst " << dstId;
+                auto key = NebulaKeyUtils::edgeKey(
+                    partId, vertexId, edgeType, dstId - 10001, dstId, folly::Endian::big(version));
+                auto val = TestUtils::setupEncode(10, 20);
+                data.emplace_back(std::move(key), std::move(val));
+            }
+        }
+        folly::Baton<true, std::atomic> baton;
+        kv->asyncMultiPut(
+            0, partId, std::move(data),
+            [&](kvstore::ResultCode code) {
+                EXPECT_EQ(code, kvstore::ResultCode::SUCCEEDED);
+                baton.post();
+            });
+        baton.wait();
+    }
+}
+
 
 void buildRequest(cpp2::EdgePropRequest& req) {
     req.set_space_id(0);
@@ -189,6 +218,20 @@ void checkTTLResponse(cpp2::EdgePropResponse& resp) {
 }
 
 
+void checkMultiVersionsResponse(cpp2::EdgePropResponse& resp, bool exist) {
+    EXPECT_EQ(0, resp.result.failed_codes.size());
+    EXPECT_EQ(14, resp.schema.columns.size());
+    auto provider = std::make_shared<ResultSchemaProvider>(resp.schema);
+    LOG(INFO) << "Check edge props...";
+    RowSetReader rsReader(provider, resp.data);
+    if (exist) {
+        EXPECT_NE(0, rsReader.getData().size());
+    } else {
+        EXPECT_EQ(0, rsReader.getData().size());
+    }
+}
+
+
 TEST(QueryEdgePropsTest, SimpleTest) {
     fs::TempDir rootPath("/tmp/QueryEdgePropsTest.XXXXXX");
     std::unique_ptr<kvstore::KVStore> kv = TestUtils::initKV(rootPath.path());
@@ -231,6 +274,41 @@ TEST(QueryEdgePropsTest, TTLTest) {
 
     LOG(INFO) << "Check the results...";
     checkTTLResponse(resp);
+}
+
+TEST(QueryEdgePropsTest, MultiVersionsTest) {
+    fs::TempDir rootPath("/tmp/QueryEdgePropsTest.XXXXXX");
+    std::unique_ptr<kvstore::KVStore> kv(TestUtils::initKV(rootPath.path()));
+
+    LOG(INFO) << "Prepare meta...";
+    auto schemaMng = TestUtils::mockSchemaWithMultiVersionsMan();
+    LOG(INFO) << "Build EdgePropRequest...";
+    cpp2::EdgePropRequest req;
+    buildRequest(req);
+
+    {
+        LOG(INFO) << "Prepare data...";
+        mockDataMultiVersions(kv.get(), schemaMng.get(), 4);
+        LOG(INFO) << "Test QueryEdgePropsRequest...";
+        auto* processor = QueryEdgePropsProcessor::instance(kv.get(), schemaMng.get(), nullptr);
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        LOG(INFO) << "Check the results...";
+        checkMultiVersionsResponse(resp, false);
+    }
+
+    {
+        LOG(INFO) << "Prepare data...";
+        mockDataMultiVersions(kv.get(), schemaMng.get(), 3);
+        LOG(INFO) << "Test QueryEdgePropsRequest...";
+        auto* processor = QueryEdgePropsProcessor::instance(kv.get(), schemaMng.get(), nullptr);
+        auto f = processor->getFuture();
+        processor->process(req);
+        auto resp = std::move(f).get();
+        LOG(INFO) << "Check the results...";
+        checkMultiVersionsResponse(resp, true);
+    }
 }
 
 TEST(QueryEdgePropsTest, QueryAfterEdgeAltered) {

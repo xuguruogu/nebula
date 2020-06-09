@@ -23,6 +23,21 @@ std::string SchemaPropItem::toString() const {
     return "Unknown";
 }
 
+std::string SchemaMultiVersions::toString() const {
+    std::string buf;
+    buf.reserve(256);
+    if (active_version_) {
+        buf += folly::stringPrintf(" active_version = %ld", *active_version_);
+    }
+    if (max_version_) {
+        buf += folly::stringPrintf(" max_version = %ld", *max_version_);
+    }
+    if (reserve_versions_) {
+        buf += " reserve_versions = ";
+        buf += folly::join(" ", *reserve_versions_);
+    }
+    return buf;
+}
 
  std::string SchemaPropList::toString() const {
     std::string buf;
@@ -160,6 +175,9 @@ std::string AlterTagSentence::toString() const {
     }
     if (schemaProps_ != nullptr) {
         buf +=  schemaProps_->toString();
+    }
+    if (schema_multi_versions_ != nullptr) {
+        buf += schema_multi_versions_->toString();
     }
     return buf;
 }

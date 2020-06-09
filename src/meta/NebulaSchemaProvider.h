@@ -83,6 +83,10 @@ public:
     const StatusOr<VariantType> getDefaultValue(const folly::StringPiece name) const override;
     const StatusOr<VariantType> getDefaultValue(int64_t index) const override;
 
+    void setMultiVersions(nebula::cpp2::MultiVersions multi_versions);
+
+    const nebula::cpp2::MultiVersions& getMultiVersions() const;
+
 protected:
     NebulaSchemaProvider() = default;
 
@@ -93,6 +97,7 @@ protected:
     std::unordered_map<std::string, int64_t>   fieldNameIndex_;
     std::vector<std::shared_ptr<SchemaField>>  fields_;
     nebula::cpp2::SchemaProp                   schemaProp_;
+    nebula::cpp2::MultiVersions                multi_versions_;
 };
 
 }  // namespace meta

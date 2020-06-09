@@ -124,6 +124,23 @@ public:
         return schemaMan;
     }
 
+    static std::unique_ptr<AdHocSchemaManager> mockSchemaWithMultiVersionsMan(GraphSpaceID spaceId = 0) {
+        auto schemaMan = std::make_unique<AdHocSchemaManager>();
+        auto tagId = 3001;
+        schemaMan->addTagSchema(
+            spaceId,
+            tagId,
+            TestUtils::genTagSchemaWithMultiVersionsProvider(
+                tagId, 3, 3,
+                2, 3, {0, 1, 2}));
+
+        schemaMan->addEdgeSchema(
+            spaceId, 101, TestUtils::genEdgeSchemaWithMultiVersionsProvider(
+                10, 10,
+                2, 3, {0, 1, 2}));
+        return schemaMan;
+    }
+
     static std::unique_ptr<meta::IndexManager> mockIndexMan(GraphSpaceID spaceId = 0,
                                                             TagID startTag = 3001,
                                                             TagID endTag = 3010,
@@ -358,6 +375,31 @@ public:
         return schema;
     }
 
+    static std::shared_ptr<meta::SchemaProviderIf>
+    genEdgeSchemaWithMultiVersionsProvider(
+        int32_t intFieldsNum, int32_t stringFieldsNum,
+        int64_t activeVersion, int64_t maxVersion, std::vector<int64_t> reserveVersions) {
+        std::shared_ptr<meta::NebulaSchemaProvider> schema(new meta::NebulaSchemaProvider(0));
+        for (int32_t i = 0; i < intFieldsNum; i++) {
+            nebula::cpp2::ColumnDef column;
+            column.name = folly::stringPrintf("col_%d", i);
+            column.type.type = nebula::cpp2::SupportedType::INT;
+            schema->addField(column.name, std::move(column.type));
+        }
+        for (int32_t i = intFieldsNum; i < intFieldsNum + stringFieldsNum; i++) {
+            nebula::cpp2::ColumnDef column;
+            column.name = folly::stringPrintf("col_%d", i);
+            column.type.type = nebula::cpp2::SupportedType::STRING;
+            schema->addField(column.name, std::move(column.type));
+        }
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(activeVersion);
+        multiVersions.set_max_version(maxVersion);
+        multiVersions.set_reserve_verions(reserveVersions);
+        schema->setMultiVersions(multiVersions);
+        return schema;
+    }
+
 
     /**
      * It will generate tag SchemaProvider with some int fields and string fields
@@ -410,6 +452,32 @@ public:
         prop.set_ttl_duration(200);
         prop.set_ttl_col(folly::stringPrintf("tag_%d_col_0", tagId));
         schema->setProp(prop);
+        return schema;
+    }
+
+    static std::shared_ptr<meta::SchemaProviderIf>
+    genTagSchemaWithMultiVersionsProvider(
+        TagID tagId,
+        int32_t intFieldsNum, int32_t stringFieldsNum,
+        int64_t activeVersion, int64_t maxVersion, std::vector<int64_t> reserveVersions) {
+        std::shared_ptr<meta::NebulaSchemaProvider> schema(new meta::NebulaSchemaProvider(0));
+        for (int32_t i = 0; i < intFieldsNum; i++) {
+            nebula::cpp2::ColumnDef column;
+            column.name = folly::stringPrintf("tag_%d_col_%d", tagId, i);
+            column.type.type = nebula::cpp2::SupportedType::INT;
+            schema->addField(column.name, std::move(column.type));
+        }
+        for (int32_t i = intFieldsNum; i < intFieldsNum + stringFieldsNum; i++) {
+            nebula::cpp2::ColumnDef column;
+            column.name = folly::stringPrintf("tag_%d_col_%d", tagId, i);
+            column.type.type = nebula::cpp2::SupportedType::STRING;
+            schema->addField(column.name, std::move(column.type));
+        }
+        nebula::cpp2::MultiVersions multiVersions;
+        multiVersions.set_active_version(activeVersion);
+        multiVersions.set_max_version(maxVersion);
+        multiVersions.set_reserve_verions(reserveVersions);
+        schema->setMultiVersions(multiVersions);
         return schema;
     }
 

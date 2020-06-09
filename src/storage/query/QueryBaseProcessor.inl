@@ -165,7 +165,7 @@ cpp2::ErrorCode QueryBaseProcessor<REQ, RESP>::checkAndBuildContexts(const REQ& 
         exp_->setContext(expCtx_.get());
     }
 
-    buildTTLInfoAndRespSchema();
+    buildTTLInfoAndRespSchemaAndMultiVersions();
     return cpp2::ErrorCode::SUCCEEDED;
 }
 
@@ -189,6 +189,78 @@ QueryBaseProcessor<REQ, RESP>::getEdgeTTLInfo(EdgeType edgeType) {
        ret.emplace(edgeFound->second.first, edgeFound->second.second);
     }
     return ret;
+}
+
+
+template<typename REQ, typename RESP>
+folly::Optional<int64_t>
+QueryBaseProcessor<REQ, RESP>::getTagActiveVersionsInfo(TagID tagId) {
+    folly::Optional<int64_t> ret;
+    auto tagFound = tagActiveVersionsInfo_.find(tagId);
+    if (tagFound != tagActiveVersionsInfo_.end()) {
+        ret.emplace(tagFound->second);
+    }
+    return ret;
+}
+
+template<typename REQ, typename RESP>
+folly::Optional<int64_t>
+QueryBaseProcessor<REQ, RESP>::getTagMaxVersionsInfo(TagID tagId) {
+    folly::Optional<int64_t> ret;
+    auto tagFound = tagMaxVersionsInfo_.find(tagId);
+    if (tagFound != tagMaxVersionsInfo_.end()) {
+        ret.emplace(tagFound->second);
+    }
+    return ret;
+}
+
+template<typename REQ, typename RESP>
+folly::Optional<int64_t>
+QueryBaseProcessor<REQ, RESP>::getEdgeActiveVersionsInfo(EdgeType edgeType) {
+    folly::Optional<int64_t> ret;
+    auto edgeFound = edgeActiveVersionsInfo_.find(edgeType);
+    if (edgeFound != edgeActiveVersionsInfo_.end()) {
+        ret.emplace(edgeFound->second);
+    }
+    return ret;
+}
+
+template<typename REQ, typename RESP>
+folly::Optional<int64_t>
+QueryBaseProcessor<REQ, RESP>::getEdgeMaxVersionsInfo(EdgeType edgeType) {
+    folly::Optional<int64_t> ret;
+    auto edgeFound = edgeMaxVersionsInfo_.find(edgeType);
+    if (edgeFound != edgeMaxVersionsInfo_.end()) {
+        ret.emplace(edgeFound->second);
+    }
+    return ret;
+}
+
+template<typename REQ, typename RESP>
+bool
+QueryBaseProcessor<REQ, RESP>::multiVersionsCheck(folly::StringPiece key) {
+    if (NebulaKeyUtils::isEdge(key)) {
+        EdgeType edgeType = NebulaKeyUtils::getEdgeType(key);
+        auto edgeActiveVersion = getEdgeActiveVersionsInfo(edgeType);
+        auto edgeMaxVersion = getEdgeMaxVersionsInfo(edgeType);
+        if (edgeActiveVersion.has_value() || edgeMaxVersion.has_value()) {
+            return ((edgeMaxVersion.has_value() &&
+                     NebulaKeyUtils::getVersionBigEndian(key) <= edgeMaxVersion.value()) ||
+                    (edgeActiveVersion.has_value() &&
+                     NebulaKeyUtils::getVersionBigEndian(key) == edgeActiveVersion.value()));
+        }
+    } else if (NebulaKeyUtils::isVertex(key)) {
+        TagID tagID = NebulaKeyUtils::getTagId(key);
+        auto tagActiveVersion = getTagActiveVersionsInfo(tagID);
+        auto tagMaxVersion = getTagMaxVersionsInfo(tagID);
+        if (tagActiveVersion.has_value() || tagMaxVersion.has_value()) {
+            return ((tagMaxVersion.has_value() &&
+                     NebulaKeyUtils::getVersionBigEndian(key) <= tagMaxVersion.value()) ||
+                    (tagActiveVersion.has_value() &&
+                     NebulaKeyUtils::getVersionBigEndian(key) == tagActiveVersion.value()));
+        }
+    }
+    return true;
 }
 
 template<typename REQ, typename RESP>
@@ -409,8 +481,8 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
     auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
     if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
         auto result = vertexCache_->get(std::make_pair(vId, tagId), partId);
-        if (result.ok()) {
-            auto v = std::move(result).value();
+        std::string v;
+        if (result.ok() && multiVersionsCheck(v = std::move(result).value())) {
             auto reader = RowReader::getTagPropReader(this->schemaMan_, v, spaceId_, tagId);
             if (reader == nullptr) {
                 return kvstore::ResultCode::ERR_CORRUPT_DATA;
@@ -446,7 +518,16 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
     }
     // Will decode the properties according to the schema version
     // stored along with the properties
+    while (iter && iter->valid() &&
+           !multiVersionsCheck(iter->key())) {
+        VLOG(3) << "Only get the active version for each tag.";
+        iter->next();
+    }
+
     if (iter && iter->valid()) {
+        VLOG(4) << "collectVertexProps: partId " << partId
+                << " vId " << vId << " tagId " << tagId
+                << " version " << NebulaKeyUtils::getVersionBigEndian(iter->key());
         auto reader = RowReader::getTagPropReader(this->schemaMan_, iter->val(), spaceId_, tagId);
         if (reader == nullptr) {
             return kvstore::ResultCode::ERR_CORRUPT_DATA;
@@ -507,6 +588,13 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectEdgeProps(
         auto val = iter->val();
         auto rank = NebulaKeyUtils::getRank(key);
         auto dstId = NebulaKeyUtils::getDstId(key);
+        VLOG(4) << "collectEdgeProps: partId " << partId
+                << " vId " << vId << " edgeType " << edgeType << " rank " << rank << " dstId " << dstId
+                << " version " << NebulaKeyUtils::getVersionBigEndian(key);
+        if (!multiVersionsCheck(key)) {
+            VLOG(3) << "Only get the active version for each edge.";
+            continue;
+        }
         if (!firstLoop && rank == lastRank && lastDstId == dstId) {
             VLOG(3) << "Only get the latest version for each edge.";
             continue;
@@ -661,7 +749,7 @@ std::vector<Bucket> QueryBaseProcessor<REQ, RESP>::genBuckets(
 }
 
 template<typename REQ, typename RESP>
-void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchema() {
+void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchemaAndMultiVersions() {
     if (!this->tagContexts_.empty()) {
         for (auto& tc : this->tagContexts_) {
             nebula::cpp2::Schema respTag;
@@ -683,12 +771,6 @@ void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchema() {
                 }
             }
 
-            // build ttl info
-            auto tagFound = tagTTLInfo_.find(tc.tagId_);
-            if (tagFound != tagTTLInfo_.end()) {
-                continue;
-            }
-
             auto tagschema = this->schemaMan_->getTagSchema(spaceId_, tc.tagId_);
             if (!tagschema) {
                 VLOG(3) << "Can't find spaceId " << spaceId_ << ", tagId " << tc.tagId_;
@@ -701,6 +783,18 @@ void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchema() {
                 continue;
             }
 
+            // build multi versions info
+            const nebula::cpp2::MultiVersions multiVersions = nschema->getMultiVersions();
+            if (multiVersions.__isset.active_version &&
+                multiVersions.__isset.reserve_verions &&
+                !multiVersions.get_reserve_verions()->empty()) {
+                tagActiveVersionsInfo_.emplace(tc.tagId_, *multiVersions.get_active_version());
+            }
+            if (multiVersions.__isset.max_version) {
+                tagMaxVersionsInfo_.emplace(tc.tagId_, *multiVersions.get_max_version());
+            }
+
+            // build ttl info
             const nebula::cpp2::SchemaProp schemaProp = nschema->getProp();
 
             int64_t ttlDuration = 0;
@@ -749,12 +843,6 @@ void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchema() {
                 }
             }
 
-            // build ttl info
-            auto edgeFound = edgeTTLInfo_.find(ec.first);
-            if (edgeFound != edgeTTLInfo_.end()) {
-                continue;
-            }
-
             auto edgeschema = this->schemaMan_->getEdgeSchema(spaceId_, std::abs(ec.first));
             if (!edgeschema) {
                 VLOG(3) << "Can't find spaceId " << spaceId_ << ", edgeType " << ec.first;
@@ -767,6 +855,19 @@ void QueryBaseProcessor<REQ, RESP>::buildTTLInfoAndRespSchema() {
                 continue;
             }
 
+            // build multi versions info
+            const nebula::cpp2::MultiVersions multiVersions = nschema->getMultiVersions();
+            if (multiVersions.__isset.active_version &&
+                multiVersions.__isset.reserve_verions &&
+                !multiVersions.get_reserve_verions()->empty()) {
+                VLOG(3) << "EdgeType " << ec.first << ", multiVersions " << *multiVersions.get_active_version();
+                edgeActiveVersionsInfo_.emplace(ec.first, *multiVersions.get_active_version());
+            }
+            if (multiVersions.__isset.max_version) {
+                edgeMaxVersionsInfo_.emplace(ec.first, *multiVersions.get_max_version());
+            }
+
+            // build ttl info
             const nebula::cpp2::SchemaProp schemaProp = nschema->getProp();
 
             int64_t ttlDuration = 0;

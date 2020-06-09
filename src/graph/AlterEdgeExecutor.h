@@ -32,6 +32,9 @@ private:
     AlterEdgeSentence                                  *sentence_{nullptr};
     std::vector<nebula::meta::cpp2::AlterSchemaItem>    options_;
     nebula::cpp2::SchemaProp                            schemaProp_;
+    std::unique_ptr<int64_t>                            schemaActiveVersion_;
+    std::unique_ptr<std::vector<int64_t>>               schemaReserveVersions_;
+    std::unique_ptr<int64_t>                            schemaMaxVersion_;
 };
 
 }   // namespace graph

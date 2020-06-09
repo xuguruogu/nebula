@@ -83,9 +83,16 @@ struct SchemaProp {
     2: optional string   ttl_col,
 }
 
+struct MultiVersions {
+    1: optional list<i64> reserve_verions,
+    2: optional i64 active_version,
+    3: optional i64 max_version,
+}
+
 struct Schema {
     1: list<ColumnDef> columns,
     2: SchemaProp schema_prop,
+    3: MultiVersions multi_versions,
 }
 
 union SchemaID {

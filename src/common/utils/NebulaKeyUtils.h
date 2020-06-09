@@ -213,6 +213,10 @@ public:
         return readInt<int64_t>(rawKey.data() + offset, sizeof(int64_t));
     }
 
+    static int64_t getVersionBigEndian(const folly::StringPiece& rawKey) {
+        return folly::Endian::big(NebulaKeyUtils::getVersion(rawKey));
+    }
+
     static IndexID getIndexId(const folly::StringPiece& rawKey) {
         CHECK_GT(rawKey.size(), kIndexLen);
         auto offset = sizeof(PartitionID);

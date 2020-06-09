@@ -35,10 +35,25 @@ void AlterTagProcessor::process(const cpp2::AlterTagReq& req) {
     }
 
     // Get the last version of the tag
-    auto version = MetaServiceUtils::parseTagVersion(iter->key()) + 1;
+    auto version = MetaServiceUtils::parseTagVersion(iter->key());
     auto schema = MetaServiceUtils::parseSchema(iter->val());
     auto columns = schema.get_columns();
     auto prop = schema.get_schema_prop();
+    auto multi_versions = schema.get_multi_versions();
+    if (req.get_multi_versions().__isset.active_version) {
+        multi_versions.set_active_version(*req.get_multi_versions().get_active_version());
+    }
+    if (req.get_multi_versions().__isset.max_version) {
+        multi_versions.set_max_version(*req.get_multi_versions().get_max_version());
+    }
+    if (req.get_multi_versions().__isset.reserve_verions) {
+        multi_versions.set_reserve_verions(*req.get_multi_versions().get_reserve_verions());
+    }
+    if (!req.get_tag_items().empty() ||
+        req.get_schema_prop().__isset.ttl_col ||
+        req.get_schema_prop().__isset.ttl_duration) {
+        version++;
+    }
 
     // Update schema column
     auto& tagItems = req.get_tag_items();
@@ -91,6 +106,7 @@ void AlterTagProcessor::process(const cpp2::AlterTagReq& req) {
         schema.set_schema_prop(std::move(prop));
     }
     schema.set_columns(std::move(columns));
+    schema.set_multi_versions(std::move(multi_versions));
 
     LOG(INFO) << "Alter Tag " << req.get_tag_name() << ", tagId " << tagId;
     data.emplace_back(MetaServiceUtils::schemaTagKey(spaceId, tagId, version),

@@ -689,7 +689,7 @@ TEST_F(SchemaTest, TestTagAndEdge) {
             {"person_with_default"},
             {"upper"},
         };
-        ASSERT_TRUE(verifyResult(resp, expected, true, {0}));
+        ASSERT_TRUE(verifyResult(resp, expected, true, {0, 2, 3, 4, 5}));
     }
     // Test create edge without prop
     {
@@ -846,7 +846,7 @@ TEST_F(SchemaTest, TestTagAndEdge) {
             {"buy_with_default"},
             {"education"},
         };
-        ASSERT_TRUE(verifyResult(resp, expected, true, {0}));
+        ASSERT_TRUE(verifyResult(resp, expected, true, {0, 2, 3, 4, 5}));
     }
     // Test alter edge
     {
@@ -1081,7 +1081,7 @@ TEST_F(SchemaTest, TestTagAndEdge) {
             {"animal"},
             {"person"},
         };
-        ASSERT_TRUE(verifyResult(resp, expected, true, {0}));
+        ASSERT_TRUE(verifyResult(resp, expected, true, {0, 2, 3, 4, 5}));
     }
     // Test multi sentence
     {
@@ -1096,7 +1096,7 @@ TEST_F(SchemaTest, TestTagAndEdge) {
         std::vector<std::tuple<std::string>> expected1{
             {"test_tag"},
         };
-        ASSERT_TRUE(verifyResult(resp, expected1, true, {0}));
+        ASSERT_TRUE(verifyResult(resp, expected1, true, {0, 2, 3, 4, 5}));
 
         query = "USE test_multi; CREATE TAG test_tag1(); USE my_space; SHOW TAGS;";
         code = client->execute(query, resp);
@@ -1105,7 +1105,7 @@ TEST_F(SchemaTest, TestTagAndEdge) {
             {"animal"},
             {"person"},
         };
-        ASSERT_TRUE(verifyResult(resp, expected2, true, {0}));
+        ASSERT_TRUE(verifyResult(resp, expected2, true, {0, 2, 3, 4, 5}));
 
         query = "DROP SPACE test_multi";
         code = client->execute(query, resp);

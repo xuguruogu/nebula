@@ -151,6 +151,15 @@ NebulaSchemaProvider::getDefaultValue(int64_t index) const {
     return fields_[index]->getDefaultValue();
 }
 
+void NebulaSchemaProvider::setMultiVersions(nebula::cpp2::MultiVersions multi_versions) {
+    multi_versions_ = std::move(multi_versions);
+}
+
+const nebula::cpp2::MultiVersions&
+NebulaSchemaProvider::getMultiVersions() const {
+    return multi_versions_;
+}
+
 nebula::cpp2::Schema NebulaSchemaProvider::toSchema() const {
     nebula::cpp2::Schema schema;
     std::vector<nebula::cpp2::ColumnDef> columns;

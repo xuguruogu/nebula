@@ -32,8 +32,13 @@ Status AlterTagExecutor::getSchema() {
 
     const auto& schemaOpts = sentence_->getSchemaOpts();
     const auto& schemaProps = sentence_->getSchemaProps();
+    const auto& schemaActiveVersion = sentence_->getActiveVersion();
+    const auto& schemaMaxVersion = sentence_->getMaxVersion();
+    const auto& schemaReserveVersions = sentence_->getReserveVersions();
 
-    return SchemaHelper::alterSchema(schemaOpts, schemaProps, options_, schemaProp_);
+    return SchemaHelper::alterSchema(
+        schemaOpts, schemaProps, schemaActiveVersion, schemaMaxVersion, schemaReserveVersions,
+        options_, schemaProp_, schemaActiveVersion_, schemaMaxVersion_, schemaReserveVersions_);
 }
 
 
@@ -48,7 +53,9 @@ void AlterTagExecutor::execute() {
     auto *name = sentence_->name();
     auto spaceId = ectx()->rctx()->session()->space();
 
-    auto future = mc->alterTagSchema(spaceId, *name, std::move(options_), std::move(schemaProp_));
+    auto future = mc->alterTagSchema(
+        spaceId, *name, std::move(options_), std::move(schemaProp_),
+        std::move(schemaActiveVersion_), std::move(schemaMaxVersion_), std::move(schemaReserveVersions_));
     auto *runner = ectx()->rctx()->runner();
     auto cb = [this] (auto &&resp) {
         if (!resp.ok()) {
