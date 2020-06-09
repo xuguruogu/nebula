@@ -46,10 +46,14 @@ DEFINE_int32(num_worker_threads, 32, "Number of workers");
 DEFINE_string(pid_file, "pids/nebula-metad.pid", "File to hold the process id");
 DEFINE_bool(daemonize, true, "Whether run as a daemon process");
 DECLARE_bool(check_leader);
+DEFINE_bool(redirect_stdout, true, "Whether to redirect stdout and stderr to separate files");
+DEFINE_string(stdout_log_file, "metad-stdout.log", "Destination filename of stdout");
+DEFINE_string(stderr_log_file, "metad-stderr.log", "Destination filename of stderr");
 
 static std::unique_ptr<apache::thrift::ThriftServer> gServer;
 static void signalHandler(int sig);
 static Status setupSignalHandler();
+static Status setupLogging();
 
 namespace nebula {
 namespace meta {
@@ -165,6 +169,13 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    // Setup logging
+    auto status = setupLogging();
+    if (!status.ok()) {
+        LOG(ERROR) << status;
+        return EXIT_FAILURE;
+    }
+
     if (FLAGS_daemonize) {
         google::SetStderrLogging(google::FATAL);
     } else {
@@ -173,7 +184,7 @@ int main(int argc, char *argv[]) {
 
     // Detect if the server has already been started
     auto pidPath = FLAGS_pid_file;
-    auto status = ProcessUtils::isPidAvailable(pidPath);
+    status = ProcessUtils::isPidAvailable(pidPath);
     if (!status.ok()) {
         LOG(ERROR) << status;
         return EXIT_FAILURE;
@@ -308,4 +319,39 @@ void signalHandler(int sig) {
         default:
             FLOG_ERROR("Signal %d(%s) received but ignored", sig, ::strsignal(sig));
     }
+}
+
+Status setupLogging() {
+    if (!FLAGS_redirect_stdout) {
+        return Status::OK();
+    }
+
+    auto dup = [] (const std::string &filename, FILE *stream) -> Status {
+        auto path = FLAGS_log_dir + "/" + filename;
+        auto fd = ::open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (fd == -1) {
+            return Status::Error("Failed to create or open `%s': %s",
+                                 path.c_str(), ::strerror(errno));
+        }
+        if (::dup2(fd, ::fileno(stream)) == -1) {
+            return Status::Error("Failed to ::dup2 from `%s' to stdout: %s",
+                                 path.c_str(), ::strerror(errno));
+        }
+        ::close(fd);
+        return Status::OK();
+    };
+
+    Status status = Status::OK();
+    do {
+        status = dup(FLAGS_stdout_log_file, stdout);
+        if (!status.ok()) {
+            break;
+        }
+        status = dup(FLAGS_stderr_log_file, stderr);
+        if (!status.ok()) {
+            break;
+        }
+    } while (false);
+
+    return status;
 }
