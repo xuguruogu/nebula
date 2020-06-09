@@ -56,6 +56,22 @@ std::string LookupSentence::toString() const {
     return buf;
 }
 
+std::string ScanSentence::toString() const {
+    std::string buf;
+    buf.reserve(256);
+    buf += "SCAN VERTEX ";
+    buf += tag();
+    buf += " ";
+    buf += "PART " + partition()->toString();
+    buf += " ";
+    buf += "FROM " + from()->toString();
+    buf += " ";
+    buf += "LATEST_SECONDS " + latestSeconds()->toString();
+    buf += " ";
+    buf += "LIMIT " + limit()->toString();
+    return buf;
+}
+
 std::string UseSentence::toString() const {
     return "USE " + *space_;
 }

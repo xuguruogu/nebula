@@ -50,6 +50,7 @@ WHEN                        ([Ww][Hh][Ee][Nn])
 DELETE                      ([Dd][Ee][Ll][Ee][Tt][Ee])
 FIND                        ([Ff][Ii][Nn][Dd])
 LOOKUP                      ([Ll][Oo][Oo][Kk][Uu][Pp])
+SCAN                        ([Ss][Cc][Aa][Nn])
 ALTER                       ([Aa][Ll][Tt][Ee][Rr])
 STEPS                       ([Ss][Tt][Ee][Pp][Ss]?)
 OVER                        ([Oo][Vv][Ee][Rr])
@@ -201,6 +202,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {DELETE}                    { return TokenType::KW_DELETE; }
 {FIND}                      { return TokenType::KW_FIND; }
 {LOOKUP}                    { return TokenType::KW_LOOKUP; }
+{SCAN}                      { return TokenType::KW_SCAN; }
 {ALTER}                     { return TokenType::KW_ALTER; }
 {STEPS}                     { return TokenType::KW_STEPS; }
 {OVER}                      { return TokenType::KW_OVER; }
