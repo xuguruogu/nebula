@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "The meta deamon start on " << localhost;
     try {
         gServer = std::make_unique<apache::thrift::ThriftServer>();
-        gServer->setPort(FLAGS_port);
+        gServer->setAddress(FLAGS_local_ip, FLAGS_port);
         gServer->setReusePort(FLAGS_reuse_port);
         gServer->setIdleTimeout(std::chrono::seconds(0));  // No idle timeout on client connection
         gServer->setInterface(std::move(handler));
