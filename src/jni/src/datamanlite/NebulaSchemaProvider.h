@@ -35,20 +35,9 @@ public:
         bool isValid() const override {
             return true;
         }
-
-        bool hasDefaultValue() const override {
-            return hasDefaultValue_;
-        }
-
-        VariantType getDefaultValue() const override {
-            return defaultValue_;
-        }
-
     private:
         std::string name_;
         ValueType type_;
-        bool hasDefaultValue_;
-        std::string defaultValue_;
     };
 
 public:
