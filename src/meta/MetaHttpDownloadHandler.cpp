@@ -59,6 +59,11 @@ void MetaHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers) no
     hdfsHost_ = headers->getQueryParam("host");
     hdfsPort_ = headers->getIntQueryParam("port");
     hdfsPath_ = headers->getQueryParam("path");
+    if (!helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_)) {
+        LOG(ERROR) << "Hdfs Test exist failed. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
+        err_ = HttpCode::E_ILLEGAL_ARGUMENT;
+        return;
+    }
     spaceID_ = headers->getIntQueryParam("space");
 
     if (headers->hasQueryParam("tag")) {
@@ -173,9 +178,9 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
         iter->next();
     }
 
-    if (partNumber != partSize) {
-        LOG(ERROR) << "HDFS part number should be equal with nebula "
-                   << partNumber << " " << partSize;
+    if (partNumber == 0 || partNumber > partSize) {
+        LOG(ERROR) << "HDFS part number not valid parts in hdfs: "
+                   << partNumber << ", parts: " << partSize;
         return false;
     }
 

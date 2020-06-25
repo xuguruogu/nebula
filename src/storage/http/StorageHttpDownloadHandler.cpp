@@ -76,6 +76,11 @@ void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers)
      hdfsHost_ = headers->getQueryParam("host");
      hdfsPort_ = headers->getIntQueryParam("port");
      hdfsPath_ = headers->getQueryParam("path");
+    if (!helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_)) {
+        LOG(ERROR) << "Hdfs Test exist failed. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
+        err_ = HttpCode::E_ILLEGAL_ARGUMENT;
+        return;
+    }
      spaceID_ = headers->getIntQueryParam("space");
 
     auto partitions = headers->getQueryParam("parts");
@@ -208,6 +213,10 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         }
 
         auto hdfsPartPath = folly::stringPrintf("%s/%d", hdfsPath_.c_str(), partId);
+        if (!helper_->exist(hdfsHost_, hdfsPort_, hdfsPartPath)) {
+            LOG(WARNING) << "Hdfs Test exist failed. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPartPath;
+            continue;
+        }
         auto partResult = kvstore_->part(spaceID_, partId);
         if (!ok(partResult)) {
             LOG(ERROR) << "Can't found space: " << spaceID_ << ", part: " << partId;

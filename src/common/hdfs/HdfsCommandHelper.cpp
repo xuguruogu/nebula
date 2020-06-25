@@ -44,6 +44,22 @@ StatusOr<std::string> HdfsCommandHelper::copyToLocal(const std::string& hdfsHost
     }
 }
 
+StatusOr<bool> HdfsCommandHelper::exist(const std::string& hdfsHost,
+                                        int32_t hdfsPort,
+                                        const std::string& hdfsPath) {
+    auto command = folly::stringPrintf("hadoop fs -test -e hdfs://%s:%d%s",
+                                       hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
+    LOG(INFO) << "Start Running HDFS Command: " << command;
+    auto result = ProcessUtils::runCommand(command.c_str());
+    if (result.ok()) {
+        LOG(INFO) << "HDFS Command Finished: " << command << " : " << result.value();
+        return true;
+    } else {
+        LOG(INFO) << "HDFS Command Failed: " << command << " : " << result.status().toString();
+        return false;
+    }
+}
+
 bool HdfsCommandHelper::checkHadoopPath() {
     return std::getenv("HADOOP_HOME") != nullptr;
 }
