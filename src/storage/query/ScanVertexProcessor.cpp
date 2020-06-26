@@ -24,7 +24,7 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
     partId_ = req.get_part_id();
     returnAllColumns_ = req.get_all_columns();
 
-    VLOG(2) << "scan vertex. space: " << spaceId_ << " part: " << partId_;
+    VLOG(1) << "scan vertex. space: " << spaceId_ << " part: " << partId_;
 
     auto retCode = checkAndBuildContexts(req);
     if (retCode != cpp2::ErrorCode::SUCCEEDED) {
@@ -71,19 +71,19 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
         TagVersion version = NebulaKeyUtils::getVersionBigEndian(key);
         int64_t ts = std::numeric_limits<int64_t>::max() - version;
         if (ts < startTime || ts >= endTime) {
-            VLOG(2) << "ts pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
+            VLOG(1) << "ts pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
                     << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
             continue;
         }
 
         auto ctxIter = tagContexts_.find(tagId);
         if (ctxIter == tagContexts_.end()) {
-            VLOG(2) << "tag pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
+            VLOG(1) << "tag pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
                     << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
             continue;
         }
 
-        VLOG(2) << "@" << NebulaKeyUtils::getPart(key) << "/" << tagId
+        VLOG(1) << "@" << NebulaKeyUtils::getPart(key) << "/" << tagId
                 << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
 
         VertexID vId = NebulaKeyUtils::getVertexId(key);

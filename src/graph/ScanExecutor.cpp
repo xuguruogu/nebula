@@ -17,7 +17,7 @@ ScanExecutor::ScanExecutor(Sentence *sentence, ExecutionContext *ectx)
     sentence_ = static_cast<ScanSentence *>(sentence);
 }
 
-static Status __getInt(Expression* expr, int64_t &v) {
+static Status _getInt(Expression* expr, int64_t &v) {
     Getters getters;
 
     auto status = expr->prepare();
@@ -53,7 +53,7 @@ Status ScanExecutor::prepare() {
     {
         auto expr = sentence_->partition();
         int64_t partitionId = 0;
-        auto status = __getInt(expr, partitionId);
+        auto status = _getInt(expr, partitionId);
         if (!status.ok()) {
             return status;
         }
@@ -64,7 +64,7 @@ Status ScanExecutor::prepare() {
         auto expr = sentence_->from();
         if (expr) {
             VertexID vertexId = 0;
-            auto status = __getInt(expr, vertexId);
+            auto status = _getInt(expr, vertexId);
             if (!status.ok()) {
                 return status;
             }
@@ -76,7 +76,7 @@ Status ScanExecutor::prepare() {
         auto expr = sentence_->latestSeconds();
         if (expr) {
             int64_t latestSeconds = 0;
-            auto status = __getInt(expr, latestSeconds);
+            auto status = _getInt(expr, latestSeconds);
             if (!status.ok()) {
                 return status;
             }
@@ -93,7 +93,7 @@ Status ScanExecutor::prepare() {
         auto expr = sentence_->limit();
         if (expr) {
             int64_t limit = 0;
-            auto status = __getInt(expr, limit);
+            auto status = _getInt(expr, limit);
             if (!status.ok()) {
                 return status;
             }
