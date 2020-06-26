@@ -43,7 +43,7 @@ void StorageHttpDownloadHandler::init(nebula::hdfs::HdfsHelper *helper,
     CHECK(!paths_.empty());
 }
 
-static void __clean_subdirs(const std::string &root) {
+static void _clean_subdirs(const std::string &root) {
     if (fs::FileUtils::exist(root)) {
         auto dirs = fs::FileUtils::listAllDirsInDir(root.c_str(), true);
         for (auto& dir : dirs) {
@@ -108,9 +108,9 @@ void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers)
          std::string downloadRootPathTag = downloadRootPath + "/tag";
          std::string downloadRootPathGeneral = downloadRootPath + "/general";
 
-         __clean_subdirs(downloadRootPathEdge);
-         __clean_subdirs(downloadRootPathTag);
-         __clean_subdirs(downloadRootPathGeneral);
+         _clean_subdirs(downloadRootPathEdge);
+         _clean_subdirs(downloadRootPathTag);
+         _clean_subdirs(downloadRootPathGeneral);
 
          std::string downloadPath;
          if (edge_.has_value()) {
@@ -194,12 +194,6 @@ void StorageHttpDownloadHandler::onError(ProxygenError error) noexcept {
 }
 
 bool StorageHttpDownloadHandler::downloadSSTFiles() {
-    static std::atomic_flag isRunning = ATOMIC_FLAG_INIT;
-    if (isRunning.test_and_set()) {
-        LOG(ERROR) << "Download is not completed";
-        return false;
-    }
-
     std::vector<folly::SemiFuture<bool>> futures;
 
     for (auto& part : parts_) {
@@ -207,7 +201,6 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         try {
             partId = folly::to<PartitionID>(part);
         } catch (const std::exception& ex) {
-            isRunning.clear();
             LOG(ERROR) << "Invalid part: \"" << part << "\"";
             return false;
         }
@@ -259,7 +252,6 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         }
     }).wait();
     LOG(INFO) << "Download tasks have finished";
-    isRunning.clear();
     return successfully;
 }
 
