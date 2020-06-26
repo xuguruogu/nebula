@@ -579,6 +579,7 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
     auto space = nebula::value(spaceRet);
 
     std::vector<std::vector<std::string>> extraFiles;
+    unsigned cnt = 0;
     for (auto& engine : space->engines_) {
         std::vector<std::string> engineExtraFiles;
         auto parts = engine->allParts();
@@ -597,8 +598,14 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
             }
             auto files = nebula::fs::FileUtils::listAllFilesInDir(path.c_str(), true, "*.sst");
             engineExtraFiles.insert(engineExtraFiles.begin(), files.begin(), files.end());
+            cnt += files.size();
         }
         extraFiles.emplace_back(std::move(engineExtraFiles));
+    }
+
+    if (cnt == 0) {
+        LOG(ERROR) << "Ingesting extra file cnt 0.";
+        return ResultCode::ERR_INVALID_ARGUMENT;
     }
 
     for (unsigned i = 0; i < space->engines_.size(); i++) {
