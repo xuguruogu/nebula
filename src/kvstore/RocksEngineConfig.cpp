@@ -140,7 +140,7 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     }
 
 //    baseOpts.optimize_filters_for_hits = true;
-    baseOpts.table_cache_numshardbits = 8;
+//    baseOpts.table_cache_numshardbits = 8;
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
     baseOpts.compression_per_level = std::vector<rocksdb::CompressionType> {
         rocksdb::CompressionType::kSnappyCompression,
