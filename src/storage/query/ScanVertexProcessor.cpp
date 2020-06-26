@@ -14,7 +14,7 @@
 #include "meta/NebulaSchemaProvider.h"
 
 
-DECLARE_int32(max_scan_block_size);
+DECLARE_int64(max_scan_block_size);
 
 namespace nebula {
 namespace storage {
@@ -24,7 +24,11 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
     partId_ = req.get_part_id();
     returnAllColumns_ = req.get_all_columns();
 
-    VLOG(1) << "scan vertex. space: " << spaceId_ << " part: " << partId_;
+    LOG(INFO) << "scan vertex. "
+              << " space: " << spaceId_
+              << " part: " << partId_
+              << " limit: " << req.get_limit()
+        ;
 
     auto retCode = checkAndBuildContexts(req);
     if (retCode != cpp2::ErrorCode::SUCCEEDED) {
@@ -52,16 +56,48 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
                    << " space: " << spaceId_ << " part: " << partId_;
         return;
     }
+    if (!iter->valid()) {
+        LOG(WARNING) << "scan vertex iter invalid." <<
+            " space: " << spaceId_ <<
+            " part: " << partId_ <<
+            " limit: " << req.get_limit();
+        return;
+    }
 
     std::vector<cpp2::ScanVertex> vertexData;
     int32_t rowCount = 0;
-    int32_t rowLimit = req.get_limit();
+    int64_t rowLimit = req.get_limit();
     int64_t startTime = req.get_start_time(), endTime = req.get_end_time();
-    int32_t blockSize = 0;
+    int64_t blockSize = 0;
 
-    for (; iter->valid() && rowCount < rowLimit && blockSize < FLAGS_max_scan_block_size;
-         iter->next()) {
+    int64_t vertexCnt = 0;
+    int64_t edgeCnt = 0;
+    int64_t indexCnt = 0;
+    int64_t uuinCnt = 0;
+
+    int64_t matchCnt = 0;
+    int64_t inValidCnt = 0;
+    int64_t unknownCnt = 0;
+
+    for (; iter->valid() && rowCount < rowLimit; iter->next()) {
         auto key = iter->key();
+
+        if (NebulaKeyUtils::isDataKey(key)) {
+            if (NebulaKeyUtils::isEdge(key)) {
+                edgeCnt++;
+            } else if (NebulaKeyUtils::isVertex(key)) {
+                vertexCnt++;
+            } else {
+                inValidCnt++;
+            }
+        } else if (NebulaKeyUtils::isIndexKey(key)) {
+            indexCnt++;
+        } else if (NebulaKeyUtils::isUUIDKey(key)) {
+            uuinCnt++;
+        } else {
+            unknownCnt++;
+        }
+
         if (!NebulaKeyUtils::isVertex(key)) {
             continue;
         }
@@ -83,6 +119,7 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
             continue;
         }
 
+        matchCnt++;
         VLOG(1) << "@" << NebulaKeyUtils::getPart(key) << "/" << tagId
                 << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
 
@@ -111,6 +148,15 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
         rowCount++;
         blockSize += key.size() + value.size();
     }
+    LOG(INFO) << "scan vertex stats."
+              << " edge cnt: " << edgeCnt
+              << " vertex cnt: " << vertexCnt
+              << " index cnt: " << indexCnt
+              << " uuin cnt: " << uuinCnt
+              << " match cnt: " << matchCnt
+              << " invalid cnt: " << inValidCnt
+              << " unknown cnt: " << unknownCnt
+        ;
 
     resp_.set_vertex_schema(std::move(tagSchema_));
     resp_.set_vertex_data(std::move(vertexData));
