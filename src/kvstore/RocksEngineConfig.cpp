@@ -58,7 +58,7 @@ DEFINE_int32(num_compaction_threads, 16, "Number of IO threads");
 namespace nebula {
 namespace kvstore {
 
-static std::shared_ptr<rocksdb::Cache> __blockCache() {
+static std::shared_ptr<rocksdb::Cache> _blockCache() {
     static std::mutex mutex;
     static std::shared_ptr<rocksdb::Cache> cache;
     std::unique_lock<std::mutex> l(mutex);
@@ -69,7 +69,7 @@ static std::shared_ptr<rocksdb::Cache> __blockCache() {
     return cache;
 }
 
-static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> __compaction_thread_limiter() {
+static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> _compaction_thread_limiter() {
     static std::mutex mutex;
     static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter;
     std::unique_lock<std::mutex> l(mutex);
@@ -123,7 +123,7 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
         return s;
     }
 
-    bbtOpts.block_cache = __blockCache();
+    bbtOpts.block_cache = _blockCache();
     bbtOpts.whole_key_filtering = false;
     bbtOpts.enable_index_compression = true;
     bbtOpts.format_version = 5;
@@ -154,7 +154,7 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     baseOpts.compaction_style = rocksdb::kCompactionStyleUniversal;
     baseOpts.compaction_options_universal.allow_trivial_move = true;
     baseOpts.compaction_options_universal.max_size_amplification_percent = 50;
-    baseOpts.compaction_thread_limiter = __compaction_thread_limiter();
+    baseOpts.compaction_thread_limiter = _compaction_thread_limiter();
     baseOpts.dump_malloc_stats = true;
     baseOpts.report_bg_io_stats = true;
     baseOpts.memtable_insert_with_hint_prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(12));
