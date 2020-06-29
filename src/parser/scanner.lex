@@ -168,6 +168,7 @@ DEC                         ([0-9])
 EXP                         ([eE][-+]?[0-9]*)
 HEX                         ([0-9a-fA-F])
 OCT                         ([0-7])
+UNSIGNED                    ([uU])
 IP_OCTET                    ([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])
 
 JOBS                        ([Jj][Oo][Bb][Ss])
@@ -444,6 +445,16 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
                                     if (val > MAX_ABS_INTEGER) {
                                         throw GraphParser::syntax_error(*yylloc, "Out of range:");
                                     }
+                                    yylval->intval = val;
+                                } catch (...) {
+                                    throw GraphParser::syntax_error(*yylloc, "Out of range:");
+                                }
+                                return TokenType::INTEGER;
+                            }
+{DEC}+{UNSIGNED}            {
+                                try {
+                                    folly::StringPiece text(yytext, yyleng - 1);
+                                    uint64_t val = folly::to<uint64_t>(text);
                                     yylval->intval = val;
                                 } catch (...) {
                                     throw GraphParser::syntax_error(*yylloc, "Out of range:");
