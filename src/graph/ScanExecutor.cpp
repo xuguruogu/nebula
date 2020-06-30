@@ -132,136 +132,132 @@ void ScanExecutor::execute() {
             return;
         }
 
-        if (!result.get_vertex_data().empty()) {
-            if (result.get_vertex_schema().size() != 1) {
-                LOG(ERROR) << "ScanVertex return vertex_schema size != 1.";
-                doError(Status::Error("ScanVertex return vertex_schema size != 1."));
-                return;
-            }
-            auto schema = std::make_shared<ResultSchemaProvider>(
-                result.get_vertex_schema().begin()->second);
-
-            colNames_.emplace_back("id");
-            schema_ = std::make_shared<SchemaWriter>();
-            schema_->appendCol("id", nebula::cpp2::SupportedType::VID);
-            for (auto& iter : *schema) {
-                colNames_.emplace_back(iter.getName());
-                schema_->appendCol(iter.getName(), iter.getType().get_type());
-            }
-
-            rows_.reserve(result.get_vertex_data().size());
-            for (auto& data : result.get_vertex_data()) {
-                cpp2::RowValue row;
-                row.columns.reserve(colNames_.size());
-
-                cpp2::ColumnValue vid;
-                vid.set_id(data.get_vertexId());
-                row.columns.emplace_back(vid);
-
-                auto reader = RowReader::getRowReader(data.get_value(), schema);
-                for (unsigned i = 0; i < schema->getNumFields(); i++) {
-                    cpp2::ColumnValue col;
-                    switch (schema->getFieldType(i).get_type()) {
-                        case nebula::cpp2::SupportedType::BOOL:
-                        {
-                            bool v;
-                            auto ret = reader->getBool(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_bool_val(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::INT:
-                        {
-                            long v;
-                            auto ret = reader->getInt(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_integer(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::TIMESTAMP:
-                        {
-                            long v;
-                            auto ret = reader->getInt(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_timestamp(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::VID:
-                        {
-                            VertexID v;
-                            auto ret = reader->getVid(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_id(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::FLOAT:
-                        {
-                            float v;
-                            auto ret = reader->getFloat(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_single_precision(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::DOUBLE:
-                        {
-                            double v;
-                            auto ret = reader->getDouble(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_double_precision(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::STRING:
-                        {
-                            folly::StringPiece v;
-                            auto ret = reader->getString(i, v);
-                            if (ret != ResultType::SUCCEEDED) {
-                                LOG(ERROR) << "ScanVertex return unsupported type.";
-                                doError(Status::Error("ScanVertex return unsupported type."));
-                                return;
-                            }
-                            col.set_str(v);
-                        }
-                            break;
-                        case nebula::cpp2::SupportedType::YEAR:
-                        case nebula::cpp2::SupportedType::YEARMONTH:
-                        case nebula::cpp2::SupportedType::DATE:
-                        case nebula::cpp2::SupportedType::DATETIME:
-                        case nebula::cpp2::SupportedType::PATH:
-                        case nebula::cpp2::SupportedType::UNKNOWN:
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            break;
-                    }
-                    row.columns.emplace_back(col);
-                }
-                rows_.emplace_back(std::move(row));
-            }
+        if (result.get_vertex_schema().size() != 1) {
+            LOG(ERROR) << "ScanVertex return vertex_schema size != 1.";
+            doError(Status::Error("ScanVertex return vertex_schema size != 1."));
+            return;
+        }
+        colNames_.emplace_back("id");
+        auto schema = std::make_shared<ResultSchemaProvider>(
+            result.get_vertex_schema().begin()->second);
+        schema_ = std::make_shared<SchemaWriter>();
+        schema_->appendCol("id", nebula::cpp2::SupportedType::VID);
+        for (auto& iter : *schema) {
+            colNames_.emplace_back(iter.getName());
+            schema_->appendCol(iter.getName(), iter.getType().get_type());
         }
 
+        rows_.reserve(result.get_vertex_data().size());
+        for (auto& data : result.get_vertex_data()) {
+            cpp2::RowValue row;
+            row.columns.reserve(colNames_.size());
+
+            cpp2::ColumnValue vid;
+            vid.set_id(data.get_vertexId());
+            row.columns.emplace_back(vid);
+
+            auto reader = RowReader::getRowReader(data.get_value(), schema);
+            for (unsigned i = 0; i < schema->getNumFields(); i++) {
+                cpp2::ColumnValue col;
+                switch (schema->getFieldType(i).get_type()) {
+                    case nebula::cpp2::SupportedType::BOOL:
+                    {
+                        bool v;
+                        auto ret = reader->getBool(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_bool_val(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::INT:
+                    {
+                        long v;
+                        auto ret = reader->getInt(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_integer(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::TIMESTAMP:
+                    {
+                        long v;
+                        auto ret = reader->getInt(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_timestamp(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::VID:
+                    {
+                        VertexID v;
+                        auto ret = reader->getVid(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_id(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::FLOAT:
+                    {
+                        float v;
+                        auto ret = reader->getFloat(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_single_precision(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::DOUBLE:
+                    {
+                        double v;
+                        auto ret = reader->getDouble(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_double_precision(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::STRING:
+                    {
+                        folly::StringPiece v;
+                        auto ret = reader->getString(i, v);
+                        if (ret != ResultType::SUCCEEDED) {
+                            LOG(ERROR) << "ScanVertex return unsupported type.";
+                            doError(Status::Error("ScanVertex return unsupported type."));
+                            return;
+                        }
+                        col.set_str(v);
+                    }
+                        break;
+                    case nebula::cpp2::SupportedType::YEAR:
+                    case nebula::cpp2::SupportedType::YEARMONTH:
+                    case nebula::cpp2::SupportedType::DATE:
+                    case nebula::cpp2::SupportedType::DATETIME:
+                    case nebula::cpp2::SupportedType::PATH:
+                    case nebula::cpp2::SupportedType::UNKNOWN:
+                        LOG(ERROR) << "ScanVertex return unsupported type.";
+                        doError(Status::Error("ScanVertex return unsupported type."));
+                        break;
+                }
+                row.columns.emplace_back(col);
+            }
+            rows_.emplace_back(std::move(row));
+        }
         if (onResult_) {
             auto status = setupInterimResult();
             if (!status.ok()) {
