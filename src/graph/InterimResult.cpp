@@ -191,10 +191,11 @@ InterimResult::buildIndex(const std::string &vidColumn) const {
         auto name = schema->getFieldName(i);
         if (vidColumn == name) {
             VLOG(1) << "col name: " << vidColumn << ", col index: " << i;
-            if (schema->getFieldType(i).type != SupportedType::VID) {
+            if (schema->getFieldType(i).type != SupportedType::INT &&
+                schema->getFieldType(i).type != SupportedType::VID) {
                 return Status::Error(
                         "Build internal index for input data failed. "
-                        "The specific vid column `%s' is not type of VID, column index: %ul.",
+                        "The specific vid column `%s' is not type of VID or INT, column index: %u.",
                         vidColumn.c_str(), i);
             }
             vidIndex = i;
