@@ -7,6 +7,7 @@
 #include "graph/ShowExecutor.h"
 #include "network/NetworkUtils.h"
 #include "common/permission/PermissionManager.h"
+#include "utils/NebulaKeyUtils.h"
 
 namespace nebula {
 namespace graph {
@@ -342,6 +343,52 @@ void ShowExecutor::showParts() {
     std::move(future).via(runner).thenValue(cb).thenError(error);
 }
 
+static std::string _show_version(TagVersion version) {
+    char buf[128]= {0};
+    time_t ts = (std::numeric_limits<int64_t>::max() - version) / 1000000;
+    tm* local = localtime(&ts);
+    strftime(buf, 64, "%Y-%m-%d %H:%M:%S", local);
+    return folly::to<std::string>(version) + "(" + std::string(buf) + ")";
+}
+
+static std::string _show_versions(const std::vector<TagVersion>& versions) {
+    std::string s;
+    for (auto version : versions) {
+        s += _show_version(version);
+        s += ",";
+    }
+    return s.substr(0, s.length() - 1);
+}
+
+static std::string _show_mutli_versions(const nebula::cpp2::MultiVersions& multi_versions) {
+    std::string s;
+    s += "active_version: [";
+    if (multi_versions.__isset.active_version) {
+        s += _show_version(*multi_versions.get_active_version());
+    } else {
+        s += "<null>";
+    }
+    s += "] ";
+
+    s += "reserve_verions: [";
+    if (multi_versions.__isset.reserve_verions) {
+        s += _show_versions(*multi_versions.get_reserve_verions());
+    } else {
+        s += "<null>";
+    }
+    s += "] ";
+
+    s += "max_version: [";
+    if (multi_versions.__isset.max_version) {
+        s += _show_version(*multi_versions.get_max_version());
+    } else {
+        s += "<null>";
+    }
+    s += "]";
+
+    return s;
+}
+
 void ShowExecutor::showTags() {
     auto spaceId = ectx()->rctx()->session()->space();
     auto future = ectx()->getMetaClient()->listTagSchemas(spaceId);
@@ -358,7 +405,7 @@ void ShowExecutor::showTags() {
         auto value = std::move(resp).value();
         resp_ = std::make_unique<cpp2::ExecutionResponse>();
         std::vector<cpp2::RowValue> rows;
-        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion"};
+        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion", "Desc"};
         resp_->set_column_names(std::move(header));
 
         for (auto &tag : value) {
@@ -370,7 +417,7 @@ void ShowExecutor::showTags() {
 
             tags.emplace(tagID);
             std::vector<cpp2::ColumnValue> row;
-            row.resize(6);
+            row.resize(7);
             row[0].set_integer(tagID);
             row[1].set_str(std::move(tag.get_tag_name()));
             row[2].set_integer(tag.get_version());
@@ -390,6 +437,7 @@ void ShowExecutor::showTags() {
             } else {
                 row[5].set_str("<null>");
             }
+            row[6].set_str(_show_mutli_versions(multi_versions));
             rows.emplace_back();
             rows.back().set_columns(std::move(row));
         }
@@ -422,7 +470,7 @@ void ShowExecutor::showEdges() {
         auto value = std::move(resp).value();
         resp_ = std::make_unique<cpp2::ExecutionResponse>();
         std::vector<cpp2::RowValue> rows;
-        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion"};
+        std::vector<std::string> header{"ID", "Name", "SchemaVer", "ActiveVersion", "ReserveVersions", "MaxVersion", "Desc"};
         resp_->set_column_names(std::move(header));
 
         for (auto &edge : value) {
@@ -434,7 +482,7 @@ void ShowExecutor::showEdges() {
 
             edges.emplace(edgeType);
             std::vector<cpp2::ColumnValue> row;
-            row.resize(6);
+            row.resize(7);
             row[0].set_integer(edge.get_edge_type());
             row[1].set_str(std::move(edge.get_edge_name()));
             row[2].set_integer(edge.get_version());
@@ -454,6 +502,7 @@ void ShowExecutor::showEdges() {
             } else {
                 row[5].set_str("<null>");
             }
+            row[6].set_str(_show_mutli_versions(multi_versions));
             rows.emplace_back();
             rows.back().set_columns(std::move(row));
         }

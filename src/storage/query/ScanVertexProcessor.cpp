@@ -61,7 +61,6 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
             " space: " << spaceId_ <<
             " part: " << partId_ <<
             " limit: " << req.get_limit();
-        return;
     }
 
     std::vector<cpp2::ScanVertex> vertexData;
