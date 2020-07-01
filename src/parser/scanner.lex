@@ -35,7 +35,8 @@ FROM                        ([Ff][Rr][Oo][Mm])
 WHERE                       ([Ww][Hh][Ee][Rr][Ee])
 MATCH                       ([Mm][Aa][Tt][Cc][Hh])
 INSERT                      ([Ii][Nn][Ss][Ee][Rr][Tt])
-VALUES                      ([Vv][Aa][Ll][Uu][Ee][Ss]?)
+VALUE                       ([Vv][Aa][Ll][Uu][Ee])
+VALUES                      ([Vv][Aa][Ll][Uu][Ee][Ss])
 YIELD                       ([Yy][Ii][Ee][Ll][Dd])
 RETURN                      ([Rr][Ee][Tt][Uu][Rr][Nn])
 CREATE                      ([Cc][Rr][Ee][Aa][Tt][Ee])
@@ -52,7 +53,8 @@ FIND                        ([Ff][Ii][Nn][Dd])
 LOOKUP                      ([Ll][Oo][Oo][Kk][Uu][Pp])
 SCAN                        ([Ss][Cc][Aa][Nn])
 ALTER                       ([Aa][Ll][Tt][Ee][Rr])
-STEPS                       ([Ss][Tt][Ee][Pp][Ss]?)
+STEP                        ([Ss][Tt][Ee][Pp])
+STEPS                       ([Ss][Tt][Ee][Pp][Ss])
 OVER                        ([Oo][Vv][Ee][Rr])
 UPTO                        ([Uu][Pp][Tt][Oo])
 REVERSELY                   ([Rr][Ee][Vv][Ee][Rr][Ss][Ee][Ll][Yy])
@@ -205,6 +207,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {LOOKUP}                    { return TokenType::KW_LOOKUP; }
 {SCAN}                      { return TokenType::KW_SCAN; }
 {ALTER}                     { return TokenType::KW_ALTER; }
+{STEP}                      { return TokenType::KW_STEP; }
 {STEPS}                     { return TokenType::KW_STEPS; }
 {OVER}                      { return TokenType::KW_OVER; }
 {UPTO}                      { return TokenType::KW_UPTO; }
@@ -264,6 +267,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {HOSTS}                     { return TokenType::KW_HOSTS; }
 {SPACE}                     { return TokenType::KW_SPACE; }
 {SPACES}                    { return TokenType::KW_SPACES; }
+{VALUE}                     { return TokenType::KW_VALUE; }
 {VALUES}                    { return TokenType::KW_VALUES; }
 {USER}                      { return TokenType::KW_USER; }
 {USERS}                     { return TokenType::KW_USERS; }
