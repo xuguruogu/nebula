@@ -142,6 +142,7 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
             collectProps(reader.get(), props, &collector);
             data.set_value(writer.encode());
         }
+        data.set_version(version);
 
         vertexData.emplace_back(std::move(data));
         rowCount++;

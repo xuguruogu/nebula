@@ -15,6 +15,7 @@
 #include "storage/CommonUtils.h"
 
 DEFINE_bool(storage_kv_mode, false, "True for kv mode");
+DEFINE_bool(storage_remove_future_data, false, "storage remove future data");
 
 namespace nebula {
 namespace storage {
@@ -154,6 +155,11 @@ public:
     bool filterVersions(GraphSpaceID spaceId, const folly::StringPiece& key) const {
         folly::StringPiece keyWithNoVersion = NebulaKeyUtils::keyWithNoVersion(key);
         int64_t version = NebulaKeyUtils::getVersionBigEndian(key);
+        if (FLAGS_storage_remove_future_data &&
+            std::numeric_limits<int64_t>::max() - version > time::WallClock::fastNowInMicroSec() + /* 1min */ 60 * 1000000 &&
+            (NebulaKeyUtils::isVertex(key) || NebulaKeyUtils::isEdge(key))) {
+            return true;
+        }
 
         if (NebulaKeyUtils::isVertex(key)) {
             auto tagId = NebulaKeyUtils::getTagId(key);

@@ -146,6 +146,10 @@ void ScanExecutor::execute() {
             colNames_.emplace_back(iter.getName());
             schema_->appendCol(iter.getName(), iter.getType().get_type());
         }
+        colNames_.emplace_back("__version__");
+        schema_->appendCol("__version__", nebula::cpp2::SupportedType::INT);
+        colNames_.emplace_back("__ts__");
+        schema_->appendCol("__ts__", nebula::cpp2::SupportedType::TIMESTAMP);
 
         rows_.reserve(result.get_vertex_data().size());
         for (auto& data : result.get_vertex_data()) {
@@ -254,6 +258,17 @@ void ScanExecutor::execute() {
                         doError(Status::Error("ScanVertex return unsupported type."));
                         break;
                 }
+                row.columns.emplace_back(col);
+            }
+            int64_t version = data.get_version();
+            {
+                cpp2::ColumnValue col;
+                col.set_integer(version);
+                row.columns.emplace_back(col);
+            }
+            {
+                cpp2::ColumnValue col;
+                col.set_timestamp((std::numeric_limits<int64_t>::max() - version) / 1000000);
                 row.columns.emplace_back(col);
             }
             rows_.emplace_back(std::move(row));
