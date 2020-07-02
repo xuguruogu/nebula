@@ -137,11 +137,11 @@ void ScanExecutor::execute() {
             doError(Status::Error("ScanVertex return vertex_schema size != 1."));
             return;
         }
-        colNames_.emplace_back("id");
+        colNames_.emplace_back("__id__");
         auto schema = std::make_shared<ResultSchemaProvider>(
             result.get_vertex_schema().begin()->second);
         schema_ = std::make_shared<SchemaWriter>();
-        schema_->appendCol("id", nebula::cpp2::SupportedType::VID);
+        schema_->appendCol("__id__", nebula::cpp2::SupportedType::VID);
         for (auto& iter : *schema) {
             colNames_.emplace_back(iter.getName());
             schema_->appendCol(iter.getName(), iter.getType().get_type());
