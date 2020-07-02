@@ -165,7 +165,7 @@ ACCOUNT                     ([Aa][Cc][Cc][Oo][Uu][Nn][Tt])
 DBA                         ([Dd][Bb][Aa])
 CONTAINS                    ([Cc][Oo][Nn][Tt][Aa][Ii][Nn][Ss])
 
-LABEL                       ([a-zA-Z][_a-zA-Z0-9]*)
+LABEL                       ([_a-zA-Z][_a-zA-Z0-9]*)
 DEC                         ([0-9])
 EXP                         ([eE][-+]?[0-9]*)
 HEX                         ([0-9a-fA-F])
