@@ -634,7 +634,7 @@ void ShowExecutor::showCreateSpace() {
 
         std::string buf;
         buf.reserve(256);
-        buf += folly::stringPrintf("CREATE SPACE %s (", properties.get_space_name().c_str());
+        buf += folly::stringPrintf("CREATE SPACE `%s` (", properties.get_space_name().c_str());
         buf += "partition_num = ";
         buf += folly::to<std::string>(properties.get_partition_num());
         buf += ", replica_factor = ";
@@ -692,12 +692,12 @@ void ShowExecutor::showCreateTag() {
 
         std::string buf;
         buf.reserve(256);
-        buf += folly::stringPrintf("CREATE TAG %s (\n", tagName->c_str());
+        buf += folly::stringPrintf("CREATE TAG `%s` (\n", tagName->c_str());
 
         auto schema = resp.value();
         for (auto& column : schema.columns) {
             buf += "  ";
-            buf += column.name;
+            buf += "`" + column.name + "`";
             buf += " ";
             buf += valueTypeToString(column.type);
             if (column.__isset.default_value) {
@@ -714,7 +714,12 @@ void ShowExecutor::showCreateTag() {
                         defaultValue = folly::to<std::string>(value->get_double_value());
                         break;
                     case nebula::cpp2::SupportedType::STRING:
-                        defaultValue = folly::to<std::string>(value->get_string_value());
+                        defaultValue = "\"";
+                        defaultValue += folly::to<std::string>(value->get_string_value());
+                        defaultValue += "\"";
+                        break;
+                    case nebula::cpp2::SupportedType::TIMESTAMP:
+                        defaultValue = folly::to<std::string>(value->get_timestamp());
                         break;
                     default:
                         LOG(ERROR) << "Unsupported type";
@@ -790,12 +795,12 @@ void ShowExecutor::showCreateEdge() {
 
         std::string buf;
         buf.reserve(256);
-        buf += folly::stringPrintf("CREATE EDGE %s (\n",  edgeName->c_str());
+        buf += folly::stringPrintf("CREATE EDGE `%s` (\n",  edgeName->c_str());
 
         auto schema = resp.value();
         for (auto& column : schema.columns) {
             buf += "  ";
-            buf += column.name;
+            buf += "`" + column.name + "`";
             buf += " ";
             buf += valueTypeToString(column.type);
             if (column.__isset.default_value) {
@@ -812,7 +817,12 @@ void ShowExecutor::showCreateEdge() {
                         defaultValue = folly::to<std::string>(value->get_double_value());
                         break;
                     case nebula::cpp2::SupportedType::STRING:
-                        defaultValue = folly::to<std::string>(value->get_string_value());
+                        defaultValue = "\"";
+                        defaultValue += folly::to<std::string>(value->get_string_value());
+                        defaultValue += "\"";
+                        break;
+                    case nebula::cpp2::SupportedType::TIMESTAMP:
+                        defaultValue = folly::to<std::string>(value->get_timestamp());
                         break;
                     default:
                         LOG(ERROR) << "Unsupported type";
@@ -889,13 +899,13 @@ void ShowExecutor::showCreateTagIndex() {
 
         std::string buf;
         buf.reserve(256);
-        buf += folly::stringPrintf("CREATE TAG INDEX %s ON ", tagName->c_str());
+        buf += folly::stringPrintf("CREATE TAG INDEX `%s` ON ", tagName->c_str());
 
         auto& fields = indexItems.get_fields();
-        buf += indexItems.get_schema_name();
+        buf += "`" + indexItems.get_schema_name() + "`";
         buf += "(";
         for (auto &column : fields) {
-            buf += column.name;
+            buf += "`" + column.name + "`";
             buf += ", ";
         }
         buf = buf.substr(0, buf.size() - 2);
@@ -948,13 +958,13 @@ void ShowExecutor::showCreateEdgeIndex() {
 
         std::string buf;
         buf.reserve(256);
-        buf += folly::stringPrintf("CREATE EDGE INDEX %s ON ", edgeName->c_str());
+        buf += folly::stringPrintf("CREATE EDGE INDEX `%s` ON ", edgeName->c_str());
 
         auto& fields = indexItems.get_fields();
-        buf += indexItems.get_schema_name();
+        buf += "`" + indexItems.get_schema_name() + "`";
         buf += "(";
         for (auto &column : fields) {
-            buf += column.name;
+            buf += "`" + column.name + "`";
             buf += ", ";
         }
         buf = buf.substr(0, buf.size() - 2);
