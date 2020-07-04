@@ -82,6 +82,9 @@ using SpaceTagIdNameMap = std::unordered_map<std::pair<GraphSpaceID, TagID>, std
 
 // get all edgeType edgeName via spaceId
 using SpaceAllEdgeMap = std::unordered_map<GraphSpaceID, std::vector<std::string>>;
+
+// get all tagId tagName via spaceId
+using SpaceAllTagMap = std::unordered_map<GraphSpaceID, std::vector<std::string>>;
 // get leader host via spaceId and partId
 using LeaderMap = std::unordered_map<std::pair<GraphSpaceID, PartitionID>, HostAddr>;
 
@@ -429,6 +432,9 @@ public:
     // get all lastest version edge
     StatusOr<std::vector<std::string>> getAllEdgeFromCache(const GraphSpaceID& space);
 
+    // get all lastest version tag
+    StatusOr<std::vector<std::string>> getAllTagFromCache(const GraphSpaceID& space);
+
     PartsMap getPartsMapFromCache(const HostAddr& host);
 
     StatusOr<PartMeta> getPartMetaFromCache(GraphSpaceID spaceId, PartitionID partId);
@@ -516,7 +522,8 @@ protected:
                      SpaceEdgeTypeNameMap &edgeTypeNamemap,
                      SpaceNewestTagVerMap &newestTagVerMap,
                      SpaceNewestEdgeVerMap &newestEdgeVerMap,
-                     SpaceAllEdgeMap &allEdgemap);
+                     SpaceAllEdgeMap &allEdgemap,
+                     SpaceAllTagMap &allTagmap);
 
     bool loadUsersAndRoles();
 
@@ -595,6 +602,7 @@ private:
         SpaceNewestTagVerMap  spaceNewestTagVerMap_;
         SpaceNewestEdgeVerMap spaceNewestEdgeVerMap_;
         SpaceAllEdgeMap       spaceAllEdgeMap_;
+        SpaceAllTagMap        spaceAllTagMap_;
     };
 
     const ThreadLocalInfo& getThreadLocalInfo();
@@ -616,6 +624,7 @@ private:
     SpaceNewestTagVerMap  spaceNewestTagVerMap_;
     SpaceNewestEdgeVerMap spaceNewestEdgeVerMap_;
     SpaceAllEdgeMap       spaceAllEdgeMap_;
+    SpaceAllTagMap        spaceAllTagMap_;
 
     UserRolesMap          userRolesMap_;
     UserPasswordMap       userPasswordMap_;
