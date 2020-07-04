@@ -6,6 +6,8 @@
 #ifndef PARSER_TRAVERSESENTENCES_H_
 #define PARSER_TRAVERSESENTENCES_H_
 
+#include <memory>
+
 #include "base/Base.h"
 #include "parser/Sentence.h"
 #include "parser/Clauses.h"
@@ -334,37 +336,34 @@ private:
 
 class FetchVerticesSentence final : public Sentence {
 public:
-    FetchVerticesSentence(std::string  *tag,
+    FetchVerticesSentence(FetchLabels  *tags,
                           VertexIDList *vidList,
                           YieldClause  *clause) {
         kind_ = Kind::kFetchVertices;
-        tag_.reset(tag);
+        tags_.reset(tags);
         vidList_.reset(vidList);
         yieldClause_.reset(clause);
     }
 
-    FetchVerticesSentence(std::string  *tag,
+    FetchVerticesSentence(FetchLabels  *tags,
                           Expression   *ref,
                           YieldClause  *clause) {
         kind_ = Kind::kFetchVertices;
-        tag_.reset(tag);
+        tags_.reset(tags);
         vidRef_.reset(ref);
         yieldClause_.reset(clause);
     }
 
-    explicit FetchVerticesSentence(Expression *vid) {
+    FetchVerticesSentence(Expression *vid) {
         kind_ = Kind::kFetchVertices;
-        tag_ = std::make_unique<std::string>("*");
         vidList_ = std::make_unique<VertexIDList>();
         vidList_->add(vid);
+        tags_ = std::make_unique<FetchLabels>();
+        tags_->addLabel(new std::string("*"));
     }
 
-    bool isAllTagProps() {
-        return *tag_ == "*";
-    }
-
-    auto tag() const {
-        return tag_.get();
+    FetchLabels* tags() const {
+        return tags_.get();
     }
 
     auto vidList() const {
@@ -383,14 +382,10 @@ public:
         return yieldClause_.get();
     }
 
-    void setYieldClause(YieldClause *clause) {
-        yieldClause_.reset(clause);
-    }
-
     std::string toString() const override;
 
 private:
-    std::unique_ptr<std::string>    tag_;
+    std::unique_ptr<FetchLabels>    tags_;
     std::unique_ptr<VertexIDList>   vidList_;
     std::unique_ptr<Expression>     vidRef_;
     std::unique_ptr<YieldClause>    yieldClause_;

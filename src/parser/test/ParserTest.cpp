@@ -1000,6 +1000,12 @@ TEST(Parser, FetchVertex) {
     }
     {
         GQLParser parser;
+        std::string query = "FETCH PROP ON person, another 1, 2, 3";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
         std::string query = "FETCH PROP ON person hash(\"dutor\")";
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();
@@ -1083,6 +1089,12 @@ TEST(Parser, FetchEdge) {
     {
         GQLParser parser;
         std::string query = "FETCH PROP ON transfer 12345 -> -54321";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "FETCH PROP ON transfer, another 12345 -> -54321";
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();
     }
