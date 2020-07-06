@@ -109,7 +109,27 @@ Status FetchVerticesExecutor::prepareTags() {
     }
 
     if (tagNames.size() == 1 && *tagNames[0] == "*") {
-        fetchAll_ = true;
+        if (fromType_ == kInstantExpr) {
+            singleFetchAll_ = true;
+        } else {
+            auto tagsStatus = ectx()->schemaManager()->getAllTag(spaceId_);
+            if (!tagsStatus.ok()) {
+                return tagsStatus.status();
+            }
+            for (auto& tagName : std::move(tagsStatus).value()) {
+                auto tagIdStatus = ectx()->schemaManager()->toTagID(spaceId_, tagName);
+                if (!tagIdStatus.ok()) {
+                    return tagIdStatus.status();
+                }
+                auto tagId = tagIdStatus.value();
+                tagNames_.push_back(tagName);
+                tagIds_.push_back(tagId);
+                auto result = tagNameSet_.emplace(tagName);
+                if (!result.second) {
+                    return Status::Error(folly::sformat("tag({}) was dup", tagName));
+                }
+            }
+        }
     } else {
         for (auto tagName : tagNames) {
             auto tagStatus = ectx()->schemaManager()->toTagID(spaceId_, *tagName);
@@ -130,7 +150,7 @@ Status FetchVerticesExecutor::prepareTags() {
 }
 
 Status FetchVerticesExecutor::prepareYield() {
-    if (fetchAll_) {
+    if (singleFetchAll_) {
         // nothing to do.
         return Status::OK();
     }
@@ -418,7 +438,7 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
         }
     }
 
-    if (fetchAll_) {
+    if (singleFetchAll_) {
         VertexID vid = vids_[0];
         if (dataMap.find(vid) == dataMap.end()) {
             finishExecution(std::move(rsWriter));

@@ -53,7 +53,7 @@ private:
     };
 private:
     GraphSpaceID                                spaceId_{-1};
-    bool                                        fetchAll_{false};
+    bool                                        singleFetchAll_{false};
     FromType                                    fromType_{kInstantExpr};
     YieldClause                                *yieldClause_{nullptr};
     std::unique_ptr<cpp2::ExecutionResponse>    resp_;
