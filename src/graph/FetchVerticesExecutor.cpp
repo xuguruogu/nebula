@@ -191,6 +191,7 @@ Status FetchVerticesExecutor::prepareYield() {
                         yields_.emplace_back(column);
                         colNames_.emplace_back(column->toString());
                         colTypes_.emplace_back(nebula::cpp2::SupportedType::UNKNOWN);
+                        expCtx_->addInputProp(prop);
                     }
                     continue;
                 }
@@ -208,6 +209,7 @@ Status FetchVerticesExecutor::prepareYield() {
                         yields_.emplace_back(column);
                         colNames_.emplace_back(column->toString());
                         colTypes_.emplace_back(nebula::cpp2::SupportedType::UNKNOWN);
+                        expCtx_->addInputProp(prop);
                     }
                     continue;
                 }
@@ -477,16 +479,10 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
                 if (rc != ResultType::SUCCEEDED) {
                     return Status::Error("Column `%s' not found", colname_->c_str());
                 }
-                auto iter = dataMap.find(vid);
-                if (iter == dataMap.end()) {
+                if (dataMap.find(vid) == dataMap.end() && !expCtx_->hasInputProp()) {
                     return Status::OK();
                 }
-                auto& ds = iter->second;
-                for (auto tagId : tagIds_) {
-                    if (ds.find(tagId) == ds.end()) {
-                        return Status::OK();
-                    }
-                }
+                auto& ds = dataMap[vid];
 
                 std::vector<VariantType> record;
                 auto schema = reader->getSchema().get();
@@ -509,9 +505,17 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
                         return tagIdStatus.status();
                     }
                     TagID tagId = std::move(tagIdStatus).value();
-                    auto vreader = ds[tagId].get();
-                    auto vschema = vreader->getSchema().get();
-                    return Collector::getProp(vschema, prop, vreader);
+                    if (ds.find(tagId) != ds.end()) {
+                        auto vreader = ds[tagId].get();
+                        auto vschema = vreader->getSchema().get();
+                        return Collector::getProp(vschema, prop, vreader);
+                    } else {
+                        auto ts = ectx()->schemaManager()->getTagSchema(spaceId_, tagId);
+                        if (ts == nullptr) {
+                            return Status::Error("No tag schema for %s", tagName.c_str());
+                        }
+                        return RowReader::getDefaultProp(ts.get(), prop);
+                    }
                 };
 
                 for (auto *column : yields_) {
@@ -553,19 +557,10 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
                 if (iter == dataMap.end()) {
                     continue;
                 }
-                auto& ds = iter->second;
-                {
-                    bool match = true;
-                    for (auto tagId : tagIds_) {
-                        if (ds.find(tagId) == ds.end()) {
-                            match = false;
-                            break;
-                        }
-                    }
-                    if (!match) {
-                        continue;
-                    }
+                if (dataMap.find(vid) == dataMap.end() && !expCtx_->hasInputProp()) {
+                    continue;
                 }
+                auto& ds = dataMap[vid];
                 std::vector<VariantType> record;
                 Getters getters;
                 getters.getInputProp = [&] (const std::string &prop) -> OptVariantType {
@@ -582,9 +577,17 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
                         return tagIdStatus.status();
                     }
                     TagID tagId = std::move(tagIdStatus).value();
-                    auto vreader = ds[tagId].get();
-                    auto vschema = vreader->getSchema().get();
-                    return Collector::getProp(vschema, prop, vreader);
+                    if (ds.find(tagId) != ds.end()) {
+                        auto vreader = ds[tagId].get();
+                        auto vschema = vreader->getSchema().get();
+                        return Collector::getProp(vschema, prop, vreader);
+                    } else {
+                        auto ts = ectx()->schemaManager()->getTagSchema(spaceId_, tagId);
+                        if (ts == nullptr) {
+                            return Status::Error("No tag schema for %s", tagName.c_str());
+                        }
+                        return RowReader::getDefaultProp(ts.get(), prop);
+                    }
                 };
 
                 for (auto *column : yields_) {
