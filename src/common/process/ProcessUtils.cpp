@@ -166,7 +166,10 @@ StatusOr<std::string> ProcessUtils::runCommand(const char* command) {
         return Status::Error("Failed to read the output of the command");
     }
 
-    pclose(f);
+    int st = pclose(f);
+    if(WIFEXITED(st)) {
+        return Status::Error("Exist code: %d", WEXITSTATUS(st));
+    }
     return out.str();
 }
 
