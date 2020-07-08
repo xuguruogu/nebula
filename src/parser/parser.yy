@@ -140,7 +140,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 
 /* token type specification */
 %token <boolval> BOOL
-%token <intval> INTEGER IPV4
+%token <intval> INTEGER UNSIGNED_INTEGER IPV4
 %token <doubleval> DOUBLE
 %token <strval> STRING VARIABLE LABEL
 
@@ -348,6 +348,9 @@ primary_expression
     }
     | MINUS INTEGER {
         $$ = new PrimaryExpression(-$2);;
+    }
+    | UNSIGNED_INTEGER {
+        $$ = new PrimaryExpression($1);;
     }
     | MINUS base_expression {
         $$ = new UnaryExpression(UnaryExpression::NEGATE, $2);
@@ -678,6 +681,9 @@ unary_integer
     }
     | INTEGER {
         ifOutOfRange($1, @1);
+        $$ = $1;
+    }
+    | UNSIGNED_INTEGER {
         $$ = $1;
     }
     ;

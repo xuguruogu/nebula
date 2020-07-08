@@ -471,6 +471,24 @@ FunctionManager::FunctionManager() {
         };
     }
     {
+        auto &attr = functions_["idstr"];
+        attr.minArity_ = 1;
+        attr.maxArity_ = 1;
+        attr.body_ = [] (const auto &args) {
+            int64_t integer   = Expression::asInt(args[0]);
+            return folly::to<std::string>(static_cast<uint64_t>(integer));
+        };
+    }
+    {
+        auto &attr = functions_["id"];
+        attr.minArity_ = 1;
+        attr.maxArity_ = 1;
+        attr.body_ = [] (const auto &args) {
+            auto id = Expression::asString(args[0]);
+            return static_cast<int64_t>(folly::to<uint64_t>(id));
+        };
+    }
+    {
         // 64bit signed hash value
         auto &attr = functions_["hash"];
         attr.minArity_ = 1;

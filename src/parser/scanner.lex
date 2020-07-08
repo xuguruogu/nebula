@@ -463,7 +463,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
                                 } catch (...) {
                                     throw GraphParser::syntax_error(*yylloc, "Out of range:");
                                 }
-                                return TokenType::INTEGER;
+                                return TokenType::UNSIGNED_INTEGER;
                             }
 {DEC}+\.{DEC}*{EXP}         {
                                 try {

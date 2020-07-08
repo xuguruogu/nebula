@@ -33,6 +33,12 @@ TEST(Parser, Go) {
     }
     {
         GQLParser parser;
+        std::string query = "GO FROM 13365709997586192577u OVER friend";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
         std::string query = "GO FROM 1 OVER friend;";
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();

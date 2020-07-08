@@ -87,7 +87,7 @@ void DownloadExecutor::execute() {
             LOG(INFO) << "Download Successfully";
             return true;
         } else {
-            LOG(ERROR) << "Download Failed ";
+            LOG(ERROR) << "Download Failed: " << result.value();
             return false;
         }
     };

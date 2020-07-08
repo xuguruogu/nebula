@@ -656,6 +656,9 @@ TEST_F(ExpressionTest, FunctionCall) {
 
     TEST_EXPR(min2(0.1, 0.2), 0.1);
     TEST_EXPR(max2(0.1, 0.2), 0.2);
+
+    TEST_EXPR(idstr(1), "1");
+    TEST_EXPR(id("123"), 123);
 }
 
 TEST_F(ExpressionTest, StringFunctionCall) {
