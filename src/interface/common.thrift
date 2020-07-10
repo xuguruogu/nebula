@@ -133,6 +133,7 @@ enum RoleType {
     DBA    = 0x03,
     USER   = 0x04,
     GUEST  = 0x05,
+    SST    = 0x06,
 } (cpp.enum_strict)
 
 struct RoleItem {

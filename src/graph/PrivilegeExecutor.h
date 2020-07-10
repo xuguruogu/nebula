@@ -41,6 +41,10 @@ public:
                 type = nebula::cpp2::RoleType::GUEST;
                 break;
             }
+            case RoleTypeClause::RoleType::SST : {
+                type = nebula::cpp2::RoleType::SST;
+                break;
+            }
         }
         return type;
     }

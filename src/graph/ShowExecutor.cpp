@@ -1274,6 +1274,10 @@ std::string ShowExecutor::roleToStr(nebula::cpp2::RoleType type) {
             role = "GUEST";
             break;
         }
+        case nebula::cpp2::RoleType::SST : {
+            role = "SST";
+            break;
+        }
     }
     return role;
 }

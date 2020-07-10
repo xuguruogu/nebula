@@ -1888,7 +1888,9 @@ TEST(Parser, GroupBy) {
                             "F_STD($^.person.name ), "
                             "F_BIT_AND($^.person.name ), "
                             "F_BIT_OR($^.person.name ), "
-                            "F_BIT_XOR($^.person.name )";
+                            "F_BIT_XOR($^.person.name ), "
+                            "COLLECT_LIST($^.person.name ), "
+                            "COLLECT_SET($^.person.name )";
 
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();

@@ -97,6 +97,9 @@ session::Role GraphService::toRole(nebula::cpp2::RoleType role) {
         case nebula::cpp2::RoleType::GUEST : {
             return session::Role::GUEST;
         }
+        case nebula::cpp2::RoleType::SST : {
+            return session::Role::SST;
+        }
     }
     return session::Role::INVALID_ROLE;
 }

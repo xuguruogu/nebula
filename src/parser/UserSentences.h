@@ -20,7 +20,8 @@ public:
         ADMIN,
         DBA,
         USER,
-        GUEST
+        GUEST,
+        SST
     };
 
     explicit RoleTypeClause(RoleType roleType) {

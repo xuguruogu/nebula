@@ -19,7 +19,8 @@ enum class Role : char {
     DBA           = 3,
     USER          = 4,
     GUEST         = 5,
-    INVALID_ROLE  = 6,
+    SST           = 6,
+    INVALID_ROLE  = 7,
 };
 
 class Session final {
@@ -83,6 +84,9 @@ public:
             }
             case nebula::cpp2::RoleType::GUEST : {
                 return Role::GUEST;
+            }
+            case nebula::cpp2::RoleType::SST : {
+                return Role::SST;
             }
         }
         return Role::INVALID_ROLE;

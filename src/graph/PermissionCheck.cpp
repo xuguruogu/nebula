@@ -32,6 +32,23 @@ namespace graph {
 
 // static
 bool PermissionCheck::permissionCheck(session::Session *session, Sentence* sentence) {
+    if (session->roleWithSpace(session->space()) == session::Role::SST) {
+        switch (sentence->kind()) {
+            case Sentence::Kind::kUse :
+            case Sentence::Kind::kDescribeSpace :
+            case Sentence::Kind::kAlterTag :
+            case Sentence::Kind::kAlterEdge :
+            case Sentence::Kind::kIngest :
+            case Sentence::Kind::kDownload :
+//            case Sentence::Kind::kDescribeTag :
+//            case Sentence::Kind::kDescribeEdge :
+//            case Sentence::Kind::kShow :
+                return true;
+            default:
+                break;
+        }
+    }
+
     auto kind = sentence->kind();
     switch (kind) {
         case Sentence::Kind::kUnknown : {

@@ -102,6 +102,7 @@ ROLE                        ([Rr][Oo][Ll][Ee])
 GOD                         ([Gg][Oo][Dd])
 ADMIN                       ([Aa][Dd][Mm][Ii][Nn])
 GUEST                       ([Gg][Uu][Ee][Ss][Tt])
+SST                         ([Ss][Ss][Tt])
 GRANT                       ([Gg][Rr][Aa][Nn][Tt])
 REVOKE                      ([Rr][Ee][Vv][Oo][Kk][Ee])
 ON                          ([Oo][Nn])
@@ -154,6 +155,8 @@ STD                         ([Ss][Tt][Dd])
 BIT_AND                     ([Bb][It][Tt][_][Aa][Nn][Dd])
 BIT_OR                      ([Bb][It][Tt][_][Oo][Rr])
 BIT_XOR                     ([Bb][It][Tt][_][Xx][Oo][Rr])
+COLLECT_LIST                ([Cc][Oo][Ll][Ll][Ee][Cc][Tt][_][Ll][Ii][Ss][Tt])
+COLLECT_SET                 ([Cc][Oo][Ll][Ll][Ee][Cc][Tt][_][Ss][Ee][Tt])
 IS                          ([Ii][Ss])
 NULL                        ([Nn][Uu][Ll][Ll])
 SNAPSHOT                    ([Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt])
@@ -278,6 +281,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {ADMIN}                     { return TokenType::KW_ADMIN; }
 {DBA}                       { return TokenType::KW_DBA; }
 {GUEST}                     { return TokenType::KW_GUEST; }
+{SST}                       { return TokenType::KW_SST; }
 {GROUP}                     { return TokenType::KW_GROUP; }
 {PARTITION_NUM}             { return TokenType::KW_PARTITION_NUM; }
 {REPLICA_FACTOR}            { return TokenType::KW_REPLICA_FACTOR; }
@@ -304,6 +308,8 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {BIT_AND}                   { return TokenType::KW_BIT_AND; }
 {BIT_OR}                    { return TokenType::KW_BIT_OR; }
 {BIT_XOR}                   { return TokenType::KW_BIT_XOR; }
+{COLLECT_LIST}              { return TokenType::KW_COLLECT_LIST; }
+{COLLECT_SET}               { return TokenType::KW_COLLECT_SET; }
 {PATH}                      { return TokenType::KW_PATH; }
 {BIDIRECT}                  { return TokenType::KW_BIDIRECT; }
 {STATUS}                    { return TokenType::KW_STATUS; }

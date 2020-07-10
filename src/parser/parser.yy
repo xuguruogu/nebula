@@ -112,7 +112,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %token KW_PARTITION_NUM KW_REPLICA_FACTOR KW_CHARSET KW_COLLATE KW_COLLATION
 %token KW_DROP KW_REMOVE KW_SPACES KW_INGEST KW_INDEX KW_INDEXES
 %token KW_IF KW_NOT KW_EXISTS KW_WITH
-%token KW_COUNT KW_COUNT_DISTINCT KW_SUM KW_AVG KW_MAX KW_MIN KW_STD KW_BIT_AND KW_BIT_OR KW_BIT_XOR
+%token KW_COUNT KW_COUNT_DISTINCT KW_SUM KW_AVG KW_MAX KW_MIN KW_STD KW_BIT_AND KW_BIT_OR KW_BIT_XOR KW_COLLECT_LIST KW_COLLECT_SET
 %token KW_BY KW_DOWNLOAD KW_HDFS KW_UUID KW_CONFIGS KW_FORCE KW_STATUS
 %token KW_GET KW_DECLARE KW_GRAPH KW_META KW_STORAGE
 %token KW_TTL KW_TTL_DURATION KW_TTL_COL KW_DATA KW_STOP
@@ -129,7 +129,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %token KW_BIDIRECT
 %token KW_USER KW_USERS KW_ACCOUNT
 %token KW_PASSWORD KW_CHANGE KW_ROLE KW_ROLES
-%token KW_GOD KW_ADMIN KW_DBA KW_GUEST KW_GRANT KW_REVOKE KW_ON
+%token KW_GOD KW_ADMIN KW_DBA KW_GUEST KW_SST KW_GRANT KW_REVOKE KW_ON
 %token KW_CONTAINS
 
 /* symbols */
@@ -281,6 +281,7 @@ unreserved_keyword
      | KW_ADMIN              { $$ = new std::string("admin"); }
      | KW_DBA                { $$ = new std::string("dba"); }
      | KW_GUEST              { $$ = new std::string("guest"); }
+     | KW_SST                { $$ = new std::string("sst"); }
      | KW_GROUP              { $$ = new std::string("group"); }
      | KW_COUNT              { $$ = new std::string("count"); }
      | KW_SUM                { $$ = new std::string("sum"); }
@@ -291,6 +292,8 @@ unreserved_keyword
      | KW_BIT_AND            { $$ = new std::string("bit_and"); }
      | KW_BIT_OR             { $$ = new std::string("bit_or"); }
      | KW_BIT_XOR            { $$ = new std::string("bit_xor"); }
+     | KW_COLLECT_LIST       { $$ = new std::string("collect_list"); }
+     | KW_COLLECT_SET        { $$ = new std::string("collect_set"); }
      | KW_PATH               { $$ = new std::string("path"); }
      | KW_DATA               { $$ = new std::string("data"); }
      | KW_LEADER             { $$ = new std::string("leader"); }
@@ -339,6 +342,8 @@ agg_function
      | KW_BIT_AND            { $$ = new std::string("BIT_AND"); }
      | KW_BIT_OR             { $$ = new std::string("BIT_OR"); }
      | KW_BIT_XOR            { $$ = new std::string("BIT_XOR"); }
+     | KW_COLLECT_LIST       { $$ = new std::string("COLLECT_LIST"); }
+     | KW_COLLECT_SET        { $$ = new std::string("COLLECT_SET"); }
      ;
 
 primary_expression
@@ -1947,6 +1952,7 @@ role_type_clause
     | KW_DBA { $$ = new RoleTypeClause(RoleTypeClause::DBA); }
     | KW_USER { $$ = new RoleTypeClause(RoleTypeClause::USER); }
     | KW_GUEST { $$ = new RoleTypeClause(RoleTypeClause::GUEST); }
+    | KW_SST { $$ = new RoleTypeClause(RoleTypeClause::SST); }
     ;
 
 acl_item_clause

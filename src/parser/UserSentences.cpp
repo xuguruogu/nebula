@@ -20,6 +20,8 @@ std::string RoleTypeClause::toString() const {
             return std::string("USER");
         case RoleType::GUEST:
             return std::string("GUEST");
+        case RoleType::SST:
+            return std::string("SST");
         default:
             return "Unknown";
     }

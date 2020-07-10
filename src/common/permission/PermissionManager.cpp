@@ -23,7 +23,8 @@ bool PermissionManager::canReadSpace(session::Session *session, GraphSpaceID spa
         case session::Role::ADMIN :
         case session::Role::DBA :
         case session::Role::USER :
-        case session::Role::GUEST : {
+        case session::Role::GUEST :
+        case session::Role::SST : {
             havePermission = true;
             break;
         }
@@ -53,6 +54,7 @@ bool PermissionManager::canReadSchemaOrData(session::Session *session) {
             havePermission = true;
             break;
         }
+        case session::Role::SST :
         case session::Role::INVALID_ROLE : {
             break;
         }
@@ -84,6 +86,7 @@ bool PermissionManager::canWriteSchema(session::Session *session) {
         }
         case session::Role::USER :
         case session::Role::GUEST :
+        case session::Role::SST :
         case session::Role::INVALID_ROLE : {
             break;
         }
@@ -161,6 +164,7 @@ bool PermissionManager::canWriteData(session::Session *session) {
             break;
         }
         case session::Role::GUEST :
+        case session::Role::SST :
         case session::Role::INVALID_ROLE : {
             break;
         }
