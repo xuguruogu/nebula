@@ -1089,6 +1089,18 @@ TEST(Parser, FetchVertex) {
         auto result = parser.parse(query);
         ASSERT_TRUE(result.ok()) << result.status();
     }
+    {
+        GQLParser parser;
+        std::string query = "FETCH PROP ON * 1, 2";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "FETCH PROP ON * $-.id";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
 }
 
 TEST(Parser, FetchEdge) {

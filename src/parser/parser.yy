@@ -914,8 +914,10 @@ fetch_vertices_sentence
     | KW_FETCH KW_PROP KW_ON fetch_labels vid_ref_expression yield_clause {
         $$ = new FetchVerticesSentence($4, $5, $6);
     }
-    | KW_FETCH KW_PROP KW_ON MUL vid {
-        $$ = new FetchVerticesSentence($5);
+    | KW_FETCH KW_PROP KW_ON MUL vid_list yield_clause {
+        auto labels = new nebula::FetchLabels();
+        labels->addLabel(new std::string("*"));
+        $$ = new FetchVerticesSentence(labels, $5, $6);
     }
     | KW_FETCH KW_PROP KW_ON MUL vid_ref_expression yield_clause {
         auto labels = new nebula::FetchLabels();

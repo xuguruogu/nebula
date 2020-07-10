@@ -354,14 +354,6 @@ public:
         yieldClause_.reset(clause);
     }
 
-    FetchVerticesSentence(Expression *vid) {
-        kind_ = Kind::kFetchVertices;
-        vidList_ = std::make_unique<VertexIDList>();
-        vidList_->add(vid);
-        tags_ = std::make_unique<FetchLabels>();
-        tags_->addLabel(new std::string("*"));
-    }
-
     FetchLabels* tags() const {
         return tags_.get();
     }
