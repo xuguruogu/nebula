@@ -59,8 +59,14 @@ void MetaHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers) no
     hdfsHost_ = headers->getQueryParam("host");
     hdfsPort_ = headers->getIntQueryParam("port");
     hdfsPath_ = headers->getQueryParam("path");
-    if (!helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_)) {
-        LOG(ERROR) << "Hdfs Test exist failed. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
+    auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_);
+    if (!existStatus.ok()) {
+        LOG(ERROR) << "Run Hdfs Test failed. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
+        err_ = HttpCode::E_ILLEGAL_ARGUMENT;
+    }
+    bool exist = existStatus.value();
+    if (!exist) {
+        LOG(ERROR) << "Hdfs Path non exist. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
         err_ = HttpCode::E_ILLEGAL_ARGUMENT;
         return;
     }
@@ -144,7 +150,7 @@ void MetaHttpDownloadHandler::onError(ProxygenError error) noexcept {
 bool MetaHttpDownloadHandler::dispatchSSTFiles() {
     auto result = helper_->ls(hdfsHost_, hdfsPort_, hdfsPath_);
     if (!result.ok()) {
-        LOG(ERROR) << "Dispatch SSTFile Failed";
+        LOG(ERROR) << "Dispatch SSTFile Failed. " << result.status();
         return false;
     }
     std::vector<std::string> files;

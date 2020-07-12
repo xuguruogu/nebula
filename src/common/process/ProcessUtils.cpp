@@ -147,7 +147,7 @@ StatusOr<std::string> ProcessUtils::runCommand(const char* command) {
     cmd += " 2>&1";
     FILE* f = popen(command, "re");
     if (f == nullptr) {
-        return Status::Error("Failed to execute the command \"%s\"", command);
+        return Status::Error("Failed to execute the command [%s]", command);
     }
 
     Cord out;
@@ -163,19 +163,18 @@ StatusOr<std::string> ProcessUtils::runCommand(const char* command) {
     if (ferror(f)) {
         // Something is wrong
         fclose(f);
-        return Status::Error("Failed to read the output of the command. \"%s\"", command);
+        return Status::Error("Failed to read the output of the command. [%s]", command);
     }
 
     int st = pclose(f);
-    if(WIFEXITED(st)) {
-        // normal exist
-        if (WEXITSTATUS(st)) {
-            return Status::Error(
-                "Exist code: %d. \"%s\".: %s",
-                WEXITSTATUS(st), command, out.str().c_str());
-        }
-    } else {
-        return Status::Error("Cmd Exist unexcepted: \"%s\"", command);
+    if (!WIFEXITED(st)) {
+        return Status::Error("Cmd Exist unexcepted. command: [%s]", command);
+    }
+
+    if (WEXITSTATUS(st)) {
+        return folly::stringPrintf(
+            "ERR: [%d], output: [%s], command: [%s]",
+            WEXITSTATUS(st), out.str().c_str(), command);
     }
     return out.str();
 }
