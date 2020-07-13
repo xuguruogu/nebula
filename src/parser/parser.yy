@@ -978,11 +978,11 @@ edge_key_ref:
 
 fetch_edges_sentence
     : KW_FETCH KW_PROP KW_ON fetch_labels edge_keys yield_clause {
-        auto fetch = new FetchEdgesSentence($4->release(), $5, $6);
+        auto fetch = new FetchEdgesSentence($4, $5, $6);
         $$ = fetch;
     }
     | KW_FETCH KW_PROP KW_ON fetch_labels edge_key_ref yield_clause {
-        auto fetch = new FetchEdgesSentence($4->release(), $5, $6);
+        auto fetch = new FetchEdgesSentence($4, $5, $6);
         $$ = fetch;
     }
     ;

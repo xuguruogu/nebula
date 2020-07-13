@@ -470,20 +470,20 @@ private:
 
 class FetchEdgesSentence final : public Sentence {
 public:
-    FetchEdgesSentence(std::string *edge,
+    FetchEdgesSentence(FetchLabels *edges,
                        EdgeKeys    *keys,
                        YieldClause *clause) {
         kind_ = Kind::kFetchEdges;
-        edge_.reset(edge);
+        edges_.reset(edges);
         edgeKeys_.reset(keys);
         yieldClause_.reset(clause);
     }
 
-    FetchEdgesSentence(std::string *edge,
+    FetchEdgesSentence(FetchLabels *edges,
                        EdgeKeyRef  *ref,
                        YieldClause *clause) {
         kind_ = Kind::kFetchEdges;
-        edge_.reset(edge);
+        edges_.reset(edges);
         keyRef_.reset(ref);
         yieldClause_.reset(clause);
     }
@@ -516,14 +516,14 @@ public:
         return yieldClause_.get();
     }
 
-    std::string* edge() const {
-        return edge_.get();
+    FetchLabels* edges() const {
+        return edges_.get();
     }
 
     std::string toString() const override;
 
 private:
-    std::unique_ptr<std::string>    edge_;
+    std::unique_ptr<FetchLabels>    edges_;
     std::unique_ptr<EdgeKeys>       edgeKeys_;
     std::unique_ptr<EdgeKeyRef>     keyRef_;
     std::unique_ptr<YieldClause>    yieldClause_;

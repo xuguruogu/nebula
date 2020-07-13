@@ -63,12 +63,18 @@ std::string ScanSentence::toString() const {
     buf += tag();
     buf += " ";
     buf += "PART " + partition()->toString();
-    buf += " ";
-    buf += "FROM " + from()->toString();
-    buf += " ";
-    buf += "LATEST_SECONDS " + latestSeconds()->toString();
-    buf += " ";
-    buf += "LIMIT " + limit()->toString();
+    if (from() != nullptr) {
+        buf += " ";
+        buf += "FROM " + from()->toString();
+    }
+    if (latestSeconds() != nullptr) {
+        buf += " ";
+        buf += "LATEST_SECONDS " + latestSeconds()->toString();
+    }
+    if (limit() != nullptr) {
+        buf += " ";
+        buf += "LIMIT " + limit()->toString();
+    }
     return buf;
 }
 
@@ -265,7 +271,7 @@ std::string FetchEdgesSentence::toString() const {
     std::string buf;
     buf.reserve(256);
     buf += "FETCH PROP ON ";
-    buf += *edge_;
+    buf += edges_->toString();
     buf += " ";
     if (isRef()) {
         buf += keyRef_->toString();

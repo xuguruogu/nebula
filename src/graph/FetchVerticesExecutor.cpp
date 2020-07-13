@@ -14,7 +14,7 @@ namespace graph {
 
 FetchVerticesExecutor::FetchVerticesExecutor(Sentence *sentence, ExecutionContext *ectx)
         : TraverseExecutor(ectx, "fetch_vertices") {
-    sentence_ = static_cast<FetchVerticesSentence*>(sentence);
+    sentence_ = dynamic_cast<FetchVerticesSentence*>(sentence);
 }
 
 Status FetchVerticesExecutor::prepare() {
@@ -27,15 +27,15 @@ Status FetchVerticesExecutor::prepareVids() {
         fromType_ = kRef;
         auto *expr = sentence_->ref();
         if (expr->isInputExpression()) {
-            auto *iexpr = static_cast<InputPropertyExpression*>(expr);
+            auto *iexpr = dynamic_cast<InputPropertyExpression*>(expr);
             colname_ = iexpr->prop();
-            inputs_p_ = inputs_.get();
+            inputsPtr_ = inputs_.get();
         } else if (expr->isVariableExpression()) {
-            auto *vexpr = static_cast<VariablePropertyExpression*>(expr);
+            auto *vexpr = dynamic_cast<VariablePropertyExpression*>(expr);
             auto varname = vexpr->alias();
             colname_ = vexpr->prop();
             bool existing = false;
-            inputs_p_ = ectx()->variableHolder()->get(*varname, &existing);
+            inputsPtr_ = ectx()->variableHolder()->get(*varname, &existing);
             if (!existing) {
                 return Status::Error("Variable `%s' not defined", varname->c_str());
             }
@@ -48,14 +48,14 @@ Status FetchVerticesExecutor::prepareVids() {
         if (colname_ != nullptr && *colname_ == "*") {
             return Status::Error("Cant not use `*' to reference a vertex id column.");
         }
-        if (inputs_p_ == nullptr || !inputs_p_->hasData()) {
+        if (inputsPtr_ == nullptr || !inputsPtr_->hasData()) {
             return Status::OK();
         }
         status = checkIfDuplicateColumn();
         if (!status.ok()) {
             return status;
         }
-        auto vidsStatus = inputs_p_->getDistinctVIDs(*colname_);
+        auto vidsStatus = inputsPtr_->getDistinctVIDs(*colname_);
         if (!vidsStatus.ok()) {
             return std::move(vidsStatus).status();
         }
@@ -146,16 +146,8 @@ Status FetchVerticesExecutor::prepareTags() {
 }
 
 Status FetchVerticesExecutor::prepareYield() {
-    {
-        auto *column = new YieldColumn(
-            new InputPropertyExpression(new std::string("VertexID")),
-            new std::string("VertexID")
-        );
-        yieldColsHolder_.addColumn(column);
-        yields_.emplace_back(column);
-        colNames_.emplace_back("VertexID");
-        colTypes_.emplace_back(nebula::cpp2::SupportedType::VID);
-    }
+    colNames_.emplace_back("VertexID");
+    colTypes_.emplace_back(nebula::cpp2::SupportedType::VID);
     if (yieldClause_ == nullptr) {
         for (unsigned i = 0; i < tagNames_.size(); i++) {
             auto& tagName = tagNames_[i];
@@ -181,10 +173,10 @@ Status FetchVerticesExecutor::prepareYield() {
             }
 
             if (col->expr()->isInputExpression()) {
-                auto *inputExpr = static_cast<InputPropertyExpression*>(col->expr());
+                auto *inputExpr = dynamic_cast<InputPropertyExpression*>(col->expr());
                 auto *colName = inputExpr->prop();
                 if (*colName == "*") {
-                    auto colNames = inputs_p_->getColNames();
+                    auto colNames = inputsPtr_->getColNames();
                     for (auto &prop : colNames) {
                         Expression *expr = new InputPropertyExpression(new std::string(prop));
                         auto *column = new YieldColumn(expr);
@@ -197,10 +189,10 @@ Status FetchVerticesExecutor::prepareYield() {
                     continue;
                 }
             } else if (col->expr()->isVariableExpression()) {
-                auto *variableExpr = static_cast<VariablePropertyExpression*>(col->expr());
+                auto *variableExpr = dynamic_cast<VariablePropertyExpression*>(col->expr());
                 auto *colName = variableExpr->prop();
                 if (*colName == "*") {
-                    auto colNames = inputs_p_->getColNames();
+                    auto colNames = inputsPtr_->getColNames();
                     for (auto &prop : colNames) {
                         auto *alias = new std::string(*(variableExpr->alias()));
                         Expression *expr =
@@ -299,7 +291,7 @@ Status FetchVerticesExecutor::prepareClauses() {
         if (!status.ok()) {
             break;
         }
-    } while (0);
+    } while (false);
 
     if (!status.ok()) {
         LOG(ERROR) << "Preparing failed: " << status;
@@ -350,8 +342,7 @@ void FetchVerticesExecutor::fetchVertices() {
             }
         }
         processResult(std::move(result));
-        return;
-    };
+   };
     auto error = [this] (auto &&e) {
         auto msg = folly::stringPrintf("Get tag props exception: %s.", e.what().c_str());
         LOG(ERROR) << msg;
@@ -448,7 +439,7 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
     }
 
     if (fromType_ == kRef) {
-        if (inputs_p_ == nullptr) {
+        if (inputsPtr_ == nullptr) {
             LOG(ERROR) << "inputs is nullptr.";
             doError(Status::Error("inputs is nullptr."));
             return;
@@ -463,21 +454,18 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             if (dataMap.find(vid) == dataMap.end() && !expCtx_->hasInputProp()) {
                 return Status::OK();
             }
+            // if yield input not empty, create empty item and keep on going.
             auto& ds = dataMap[vid];
 
             std::vector<VariantType> record;
+            record.emplace_back(VariantType(vid));
+
             auto schema = reader->getSchema().get();
             Getters getters;
             getters.getVariableProp = [&] (const std::string &prop) -> OptVariantType {
-                if (prop == "VertexID") {
-                    return OptVariantType(vid);
-                }
                 return Collector::getProp(schema, prop, reader);
             };
             getters.getInputProp = [&] (const std::string &prop) -> OptVariantType {
-                if (prop == "VertexID") {
-                    return OptVariantType(vid);
-                }
                 return Collector::getProp(schema, prop, reader);
             };
             getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop) -> OptVariantType {
@@ -486,8 +474,9 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
                     return tagIdStatus.status();
                 }
                 TagID tagId = std::move(tagIdStatus).value();
-                if (ds.find(tagId) != ds.end()) {
-                    auto vreader = ds[tagId].get();
+                auto tagIter = ds.find(tagId);
+                if (tagIter != ds.end()) {
+                    auto vreader = tagIter->second.get();
                     auto vschema = vreader->getSchema().get();
                     return Collector::getProp(vschema, prop, vreader);
                 } else {
@@ -526,7 +515,7 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             return Status::OK();
         };
 
-        Status status = inputs_p_->applyTo(visitor);
+        Status status = inputsPtr_->applyTo(visitor);
         if (!status.ok()) {
             LOG(ERROR) << "inputs visit failed. " << status.toString();
             doError(status);
@@ -538,28 +527,24 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             if (iter == dataMap.end()) {
                 continue;
             }
-            if (dataMap.find(vid) == dataMap.end() && !expCtx_->hasInputProp()) {
+            if (dataMap.find(vid) == dataMap.end()) {
                 continue;
             }
             auto& ds = dataMap[vid];
+
             std::vector<VariantType> record;
+            record.emplace_back(VariantType(vid));
+
             Getters getters;
-            getters.getInputProp = [&] (const std::string &prop) -> OptVariantType {
-                if (prop == "VertexID") {
-                    return OptVariantType(vid);
-                }
-                std::string errMsg =
-                    folly::stringPrintf("Unknown input prop: %s", prop.c_str());
-                return OptVariantType(Status::Error(errMsg));
-            };
             getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop) -> OptVariantType {
                 auto tagIdStatus = ectx()->schemaManager()->toTagID(spaceId_, tagName);
                 if (!tagIdStatus.ok()) {
                     return tagIdStatus.status();
                 }
                 TagID tagId = std::move(tagIdStatus).value();
-                if (ds.find(tagId) != ds.end()) {
-                    auto vreader = ds[tagId].get();
+                auto tagIter = ds.find(tagId);
+                if (tagIter != ds.end()) {
+                    auto vreader = tagIter->second.get();
                     auto vschema = vreader->getSchema().get();
                     return Collector::getProp(vschema, prop, vreader);
                 } else {

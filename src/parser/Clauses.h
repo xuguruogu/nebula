@@ -272,12 +272,6 @@ public:
     }
 
     std::string toString() const;
-
-    std::string* release() {
-        auto label = labels_[0].release();
-        delete this;
-        return label;
-    }
 private:
     std::vector<std::unique_ptr<std::string>> labels_;
 };

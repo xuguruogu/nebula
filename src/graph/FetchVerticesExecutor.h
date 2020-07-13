@@ -68,7 +68,7 @@ private:
     std::unordered_set<std::string>             tagNameSet_;
     std::vector<TagID>                          tagIds_;
     std::vector<storage::cpp2::PropDef>         props_;
-    const InterimResult*                        inputs_p_{nullptr};
+    const InterimResult*                        inputsPtr_{nullptr};
     std::string*                                colname_{nullptr};
 };
 }  // namespace graph

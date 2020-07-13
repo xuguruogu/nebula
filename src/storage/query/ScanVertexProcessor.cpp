@@ -78,7 +78,8 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
     int64_t inValidCnt = 0;
     int64_t unknownCnt = 0;
 
-    for (; iter->valid() && rowCount < rowLimit; iter->next()) {
+    for (; iter->valid() && rowCount < rowLimit && blockSize < FLAGS_max_scan_block_size;
+         iter->next()) {
         auto key = iter->key();
 
         if (NebulaKeyUtils::isDataKey(key)) {

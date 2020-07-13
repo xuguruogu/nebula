@@ -100,6 +100,20 @@ TEST_F(FetchVerticesTest, Base) {
     {
         cpp2::ExecutionResponse resp;
         auto &player = players_["Boris Diaw"];
+        auto *fmt = "GO FROM %ld over like YIELD like._dst as id"
+                    "| FETCH PROP ON team $-.id YIELD team.name, $-.*";
+        auto query = folly::stringPrintf(fmt, player.vid());
+        auto code = client_->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        std::vector<std::string> expectedColNames{
+            {"VertexID"}, {"team.name"}, {"$-.id"}
+        };
+        ASSERT_TRUE(verifyColNames(resp, expectedColNames));
+    }
+    {
+        cpp2::ExecutionResponse resp;
+        auto &player = players_["Boris Diaw"];
         auto *fmt = "$var = GO FROM %ld over like YIELD like._dst as id;"
                     "FETCH PROP ON player $var.id YIELD player.name, player.age";
         auto query = folly::stringPrintf(fmt, player.vid());
