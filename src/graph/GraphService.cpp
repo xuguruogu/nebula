@@ -105,6 +105,12 @@ session::Role GraphService::toRole(nebula::cpp2::RoleType role) {
 }
 
 bool GraphService::auth(const std::string& username, const std::string& password) {
+    if (!FLAGS_enable_local_authorize &&
+        getConnectionContext()->getPeerAddress()->getIPAddress().isLoopback()) {
+        VLOG(1) << "Authenticating user " << username << " from local address.";
+        return true;
+    }
+
     std::string auth_type = FLAGS_auth_type;
     folly::toLowerAscii(auth_type);
     if (!auth_type.compare("password")) {

@@ -31,6 +31,7 @@ DECLARE_string(default_charset);
 DECLARE_string(default_collate);
 
 DECLARE_bool(enable_authorize);
+DECLARE_bool(enable_local_authorize);
 DECLARE_string(auth_type);
 
 DECLARE_string(cloud_http_url);
