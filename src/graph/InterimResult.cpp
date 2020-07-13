@@ -259,7 +259,7 @@ InterimResult::buildIndex(const std::string &vidColumn) const {
                         return Status::Error("Get int from interim failed.");
                     }
                     if (i == vidIndex) {
-                        index->vidToRowIndex_[v] = rowIndex++;
+                        index->vidToRowIndex_.emplace(v, rowIndex++);
                     }
                     row.emplace_back(v);
                     break;
