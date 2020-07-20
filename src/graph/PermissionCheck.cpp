@@ -40,9 +40,9 @@ bool PermissionCheck::permissionCheck(session::Session *session, Sentence* sente
             case Sentence::Kind::kAlterEdge :
             case Sentence::Kind::kIngest :
             case Sentence::Kind::kDownload :
-//            case Sentence::Kind::kDescribeTag :
-//            case Sentence::Kind::kDescribeEdge :
-//            case Sentence::Kind::kShow :
+            case Sentence::Kind::kDescribeTag :
+            case Sentence::Kind::kDescribeEdge :
+            case Sentence::Kind::kShow :
                 return true;
             default:
                 break;
