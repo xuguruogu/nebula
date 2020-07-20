@@ -51,6 +51,7 @@ private:
         kInstantExpr,
         kRef,
     };
+
 private:
     GraphSpaceID                                spaceId_{-1};
     FromType                                    fromType_{kInstantExpr};

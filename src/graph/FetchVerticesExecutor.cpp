@@ -468,7 +468,8 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             getters.getInputProp = [&] (const std::string &prop) -> OptVariantType {
                 return Collector::getProp(schema, prop, reader);
             };
-            getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop) -> OptVariantType {
+            getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop)
+                -> OptVariantType {
                 auto tagIdStatus = ectx()->schemaManager()->toTagID(spaceId_, tagName);
                 if (!tagIdStatus.ok()) {
                     return tagIdStatus.status();
@@ -499,7 +500,8 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             if (outputSchema == nullptr) {
                 outputSchema = std::make_shared<SchemaWriter>();
                 rsWriter = std::make_unique<RowSetWriter>(outputSchema);
-                auto getSchemaStatus = Collector::getSchema(record, colNames_, colTypes_, outputSchema.get());
+                auto getSchemaStatus = Collector::getSchema(
+                    record, colNames_, colTypes_, outputSchema.get());
                 if (!getSchemaStatus.ok()) {
                     return getSchemaStatus;
                 }
@@ -536,7 +538,8 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             record.emplace_back(VariantType(vid));
 
             Getters getters;
-            getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop) -> OptVariantType {
+            getters.getAliasProp = [&] (const std::string& tagName, const std::string &prop)
+                -> OptVariantType {
                 auto tagIdStatus = ectx()->schemaManager()->toTagID(spaceId_, tagName);
                 if (!tagIdStatus.ok()) {
                     return tagIdStatus.status();
@@ -568,7 +571,8 @@ void FetchVerticesExecutor::processResult(RpcResponse &&result) {
             if (outputSchema == nullptr) {
                 outputSchema = std::make_shared<SchemaWriter>();
                 rsWriter = std::make_unique<RowSetWriter>(outputSchema);
-                auto getSchemaStatus = Collector::getSchema(record, colNames_, colTypes_, outputSchema.get());
+                auto getSchemaStatus = Collector::getSchema(
+                    record, colNames_, colTypes_, outputSchema.get());
                 if (!getSchemaStatus.ok()) {
                     doError(getSchemaStatus);
                     return;
