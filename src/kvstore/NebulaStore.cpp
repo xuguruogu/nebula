@@ -604,8 +604,7 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
     }
 
     if (cnt == 0) {
-        LOG(ERROR) << "Ingesting extra file cnt 0.";
-        return ResultCode::ERR_INVALID_ARGUMENT;
+        LOG(WARNING) << "Ingesting extra file cnt 0. spaceId " << spaceId << ", subdir: " << subdir;
     }
 
     for (unsigned i = 0; i < space->engines_.size(); i++) {
