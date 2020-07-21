@@ -1739,6 +1739,7 @@ admin_sentence
     : KW_SUBMIT KW_JOB admin_operation {
         auto sentence = new AdminSentence("add_job");
         sentence->addPara(*$3);
+        delete $3;
         $$ = sentence;
     }
     | KW_SHOW KW_JOBS {
