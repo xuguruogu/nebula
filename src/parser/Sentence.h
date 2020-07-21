@@ -73,6 +73,7 @@ public:
         kDropSnapshot,
         kAdmin,
         kScan,
+        kSample,
     };
 
     Kind kind() const {

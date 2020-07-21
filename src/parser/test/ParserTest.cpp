@@ -1209,6 +1209,27 @@ TEST(Parser, Scan) {
     }
 }
 
+TEST(Parser, Sample) {
+    {
+        GQLParser parser;
+        std::string query = "SAMPLE FROM  0 OVER friend ORDER BY rand32() LIMIT 100";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "SAMPLE FROM  0 OVER friend  ORDER BY friend.test LIMIT 100";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+    {
+        GQLParser parser;
+        std::string query = "SAMPLE FROM  0 OVER friend ORDER BY friend.test * rand32() LIMIT 100";
+        auto result = parser.parse(query);
+        ASSERT_TRUE(result.ok()) << result.status();
+    }
+}
+
 TEST(Parser, AdminOperation) {
     {
         GQLParser parser;

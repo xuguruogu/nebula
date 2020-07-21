@@ -138,6 +138,58 @@ folly::SemiFuture<StorageRpcResponse<cpp2::QueryResponse>> StorageClient::getNei
         });
 }
 
+folly::SemiFuture<StorageRpcResponse<cpp2::GetNeighborsSampleResponse>> StorageClient::sampleNeighbors(
+    GraphSpaceID space,
+    nebula::cpp2::Schema schema,
+    std::vector<graph::cpp2::RowValue> rows,
+    int vid_idx,
+    const std::vector<EdgeType> &edgeTypes,
+    storage::cpp2::SampleFilter sample_filter,
+    std::vector<storage::cpp2::YieldColumn> yields,
+    folly::EventBase* evb) {
+
+    auto status = clusterIdsToHosts(
+        space, std::move(rows), [vid_idx] (const graph::cpp2::RowValue& row) {
+            const nebula::graph::cpp2::ColumnValue& col = row.columns.at(vid_idx);
+            switch (col.getType()) {
+                case nebula::graph::cpp2::ColumnValue::Type::id:
+                    return col.get_id();
+                case nebula::graph::cpp2::ColumnValue::Type::integer:
+                    return col.get_integer();
+                default:
+                    throw std::runtime_error("sampleNeighbors not supported vid type.");
+            }
+        });
+
+    if (!status.ok()) {
+        return folly::makeFuture<StorageRpcResponse<cpp2::GetNeighborsSampleResponse>>(
+            std::runtime_error(status.status().toString()));
+    }
+
+    auto& clusters = status.value();
+
+    std::unordered_map<HostAddr, cpp2::GetNeighborsSampleRequest> requests;
+    for (auto& c : clusters) {
+        auto& host = c.first;
+        auto& req = requests[host];
+        req.set_space_id(space);
+        req.set_schema(schema);
+        req.set_parts(std::move(c.second));
+        req.set_vid_index(vid_idx);
+        req.set_edge_types(edgeTypes);
+        req.set_sample_filter(sample_filter);
+        req.set_yields(yields);
+    }
+
+    return collectResponse(
+        evb, std::move(requests),
+        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsSampleRequest& r) {
+            return client->future_getBoundSample(r); },
+        [](const std::pair<const PartitionID,
+            std::vector<graph::cpp2::RowValue>>& p) {
+            return p.first;
+        });
+}
 
 folly::SemiFuture<StorageRpcResponse<cpp2::QueryStatsResponse>> StorageClient::neighborStats(
         GraphSpaceID space,

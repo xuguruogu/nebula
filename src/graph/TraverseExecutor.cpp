@@ -25,6 +25,7 @@
 #include "graph/GroupByExecutor.h"
 #include "graph/SchemaHelper.h"
 #include "graph/ScanExecutor.h"
+#include "graph/SampleExecutor.h"
 
 namespace nebula {
 namespace graph {
@@ -45,6 +46,9 @@ TraverseExecutor::makeTraverseExecutor(Sentence *sentence, ExecutionContext *ect
             break;
         case Sentence::Kind::kScan:
             executor = std::make_unique<ScanExecutor>(sentence, ectx);
+            break;
+        case Sentence::Kind::kSample:
+            executor = std::make_unique<SampleExecutor>(sentence, ectx);
             break;
         case Sentence::Kind::kPipe:
             executor = std::make_unique<PipeExecutor>(sentence, ectx);

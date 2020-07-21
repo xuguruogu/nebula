@@ -9,6 +9,7 @@ namespace java com.vesoft.nebula.storage
 namespace go nebula.storage
 
 include "common.thrift"
+include "graph.thrift"
 
 enum ErrorCode {
     SUCCEEDED = 0,
@@ -41,6 +42,10 @@ enum ErrorCode {
     E_INVALID_PEER  = -34,
     E_RETRY_EXHAUSTED = -35,
     E_TRANSFER_LEADER_FAILED = -36,
+    E_INVALID_YIELD = -37,
+    E_INVALID_DST_PROP = -38,
+    E_DUPLICATE_COLUMNS = -39,
+    E_MISS_COLUMNS = -40,
 
     // meta client failed
     E_LOAD_META_FAILED = -41,
@@ -374,6 +379,34 @@ struct ScanVertexResponse {
     5: binary next_cursor,          // next start key of scan
 }
 
+struct SampleFilter {
+    1: binary order_by,
+    2: i32 limit_size,
+}
+
+struct YieldColumn {
+    1: binary expr;
+    2: binary alias;
+    3: binary fun_name;
+}
+
+struct GetNeighborsSampleRequest {
+    1: common.GraphSpaceID space_id,
+    // partId => ids
+    2: common.Schema schema,
+    3: map<common.PartitionID, list<graph.RowValue>>(cpp.template = "std::unordered_map") parts,
+    4: i32 vid_index,
+    // When edge_type > 0, going along the out-edge, otherwise, along the in-edge
+    5: list<common.EdgeType> edge_types,
+    6: list<YieldColumn> yields,
+    7: SampleFilter sample_filter,
+}
+
+struct GetNeighborsSampleResponse {
+    1: required ResponseCommon result,
+    2: list<graph.RowValue>     rows,
+}
+
 struct PutRequest {
     1: common.GraphSpaceID space_id,
     2: map<common.PartitionID, list<common.Pair>>(cpp.template = "std::unordered_map") parts,
@@ -511,4 +544,8 @@ service StorageService {
 
     // Interfaces for edge and vertex index scan
     LookUpIndexResp   lookUpIndex(1: LookUpIndexRequest req);
+
+    // Interfaces for Sample neighbors
+    GetNeighborsSampleResponse getBoundSample(1:GetNeighborsSampleRequest req)
+
 }

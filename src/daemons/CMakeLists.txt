@@ -63,6 +63,7 @@ nebula_add_executable(
         $<TARGET_OBJECTS:schema_obj>
         $<TARGET_OBJECTS:index_obj>
         $<TARGET_OBJECTS:hdfs_helper_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:storage_thrift_obj>
         $<TARGET_OBJECTS:http_client_obj>
         $<TARGET_OBJECTS:storage_client>
@@ -108,6 +109,7 @@ nebula_add_executable(
         $<TARGET_OBJECTS:hdfs_helper_obj>
         $<TARGET_OBJECTS:http_client_obj>
         $<TARGET_OBJECTS:storage_client>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:storage_thrift_obj>
         $<TARGET_OBJECTS:meta_client>
         $<TARGET_OBJECTS:stats_obj>

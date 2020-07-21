@@ -53,6 +53,7 @@ public:
             readerPool_ = std::move(pool);
         }
         getBoundQpsStat_ = stats::Stats("storage", "get_bound");
+        boundSampleStat_ = stats::Stats("storage", "bound_sample");
         boundStatsQpsStat_ = stats::Stats("storage", "bound_stats");
         vertexPropsQpsStat_ = stats::Stats("storage", "vertex_props");
         edgePropsQpsStat_ = stats::Stats("storage", "edge_props");
@@ -71,6 +72,9 @@ public:
 
     folly::Future<cpp2::QueryResponse>
     future_getBound(const cpp2::GetNeighborsRequest& req) override;
+
+    folly::Future<cpp2::GetNeighborsSampleResponse>
+    future_getBoundSample(const cpp2::GetNeighborsSampleRequest& req) override;
 
     folly::Future<cpp2::QueryStatsResponse>
     future_boundStats(const cpp2::GetNeighborsRequest& req) override;
@@ -166,6 +170,7 @@ private:
     std::shared_ptr<folly::Executor> readerPool_;
 
     stats::Stats getBoundQpsStat_;
+    stats::Stats boundSampleStat_;
     stats::Stats boundStatsQpsStat_;
     stats::Stats vertexPropsQpsStat_;
     stats::Stats edgePropsQpsStat_;

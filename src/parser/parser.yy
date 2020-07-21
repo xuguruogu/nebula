@@ -131,6 +131,8 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %token KW_PASSWORD KW_CHANGE KW_ROLE KW_ROLES
 %token KW_GOD KW_ADMIN KW_DBA KW_GUEST KW_SST KW_GRANT KW_REVOKE KW_ON
 %token KW_CONTAINS
+%token KW_SAMPLE
+
 
 /* symbols */
 %token L_PAREN R_PAREN L_BRACKET R_BRACKET L_BRACE R_BRACE COMMA
@@ -158,6 +160,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <expr> vid
 %type <expr> function_call_expression
 %type <expr> uuid_expression
+%type <expr> sample_limit_clause sample_order_factor
 %type <argument_list> argument_list opt_argument_list
 %type <type> type_spec
 %type <step_clause> step_clause
@@ -242,6 +245,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <sentence> go_sentence match_sentence lookup_sentence find_path_sentence
 %type <sentence> scan_sentence
 %type <expr> scan_part_clause scan_from_clause scan_latest_seconds_clause scan_limit_clause
+%type <sentence> sample_sentence
 %type <sentence> group_by_sentence order_by_sentence limit_sentence
 %type <sentence> fetch_sentence fetch_vertices_sentence fetch_edges_sentence
 %type <sentence> set_sentence piped_sentence assignment_sentence
@@ -865,6 +869,33 @@ scan_sentence
     }
     ;
 
+sample_limit_clause
+    : KW_LIMIT expression { $$ = $2; }
+    ;
+
+sample_order_factor
+    : KW_ORDER KW_BY expression { $$ = $3; }
+    ;
+
+sample_sentence
+    : KW_SAMPLE from_clause over_clause yield_clause  sample_order_factor sample_limit_clause {
+        if ($4 == nullptr) {
+            auto *cols = new YieldColumns();
+            for (auto e : $3->edges()) {
+                if (e->isOverAll()) {
+                    continue;
+                }
+                auto *edge  = new std::string(*e->edge());
+                auto *expr  = new EdgeDstIdExpression(edge);
+                auto *col   = new YieldColumn(expr);
+                cols->addColumn(col);
+            }
+            $4 = new YieldClause(cols);
+        }
+        $$ = new SampleSentence($2, $3, $4, $5, $6);
+    }
+    ;
+
 order_factor
     : input_ref_expression {
         $$ = new OrderFactor($1, OrderFactor::ASCEND);
@@ -1386,6 +1417,7 @@ traverse_sentence
     | match_sentence { $$ = $1; }
     | lookup_sentence { $$ = $1; }
     | scan_sentence { $$ = $1; }
+    | sample_sentence { $$ = $1; }
     | group_by_sentence { $$ = $1; }
     | order_by_sentence { $$ = $1; }
     | fetch_sentence { $$ = $1; }

@@ -167,6 +167,7 @@ BIDIRECT                    ([Bb][Ii][Dd][Ii][Rr][Ee][Cc][Tt])
 ACCOUNT                     ([Aa][Cc][Cc][Oo][Uu][Nn][Tt])
 DBA                         ([Dd][Bb][Aa])
 CONTAINS                    ([Cc][Oo][Nn][Tt][Aa][Ii][Nn][Ss])
+SAMPLE                      ([Ss][Aa][Mm][Pp][Ll][Ee])
 
 LABEL                       ([_a-zA-Z][_a-zA-Z0-9]*)
 DEC                         ([0-9])
@@ -264,6 +265,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {IS}                        { return TokenType::KW_IS; }
 {NULL}                      { return TokenType::KW_NULL; }
 {RECOVER}                   { return TokenType::KW_RECOVER; }
+{SAMPLE}                    { return TokenType::KW_SAMPLE; }
 
 
  /* Unreserved keyword */

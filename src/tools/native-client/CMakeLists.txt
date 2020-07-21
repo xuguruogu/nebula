@@ -8,6 +8,7 @@ nebula_add_library(nebula_native_client SHARED
             $<TARGET_OBJECTS:base_obj>
             $<TARGET_OBJECTS:schema_obj>
             $<TARGET_OBJECTS:network_obj>
+            $<TARGET_OBJECTS:graph_thrift_obj>
             $<TARGET_OBJECTS:storage_thrift_obj>
             $<TARGET_OBJECTS:common_thrift_obj>
             $<TARGET_OBJECTS:thrift_obj>

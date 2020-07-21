@@ -3,6 +3,7 @@ set(storage_test_deps
     $<TARGET_OBJECTS:storage_service_handler>
     $<TARGET_OBJECTS:filter_obj>
     $<TARGET_OBJECTS:storage_client>
+    $<TARGET_OBJECTS:graph_thrift_obj>
     $<TARGET_OBJECTS:storage_thrift_obj>
     $<TARGET_OBJECTS:kvstore_obj>
     $<TARGET_OBJECTS:meta_client>

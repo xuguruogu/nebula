@@ -151,6 +151,7 @@ public:
         return limit_.get();
     }
 
+
     std::string toString() const override;
 
 private:
@@ -161,6 +162,50 @@ private:
     std::unique_ptr<Expression> limit_;
 };
 
+
+class SampleSentence final : public Sentence {
+public:
+    SampleSentence(FromClause* fromClause, OverClause* overClause, YieldClause* yield,
+                   Expression* order, Expression* limit) {
+
+        fromClause_.reset(fromClause);
+        overClause_.reset(overClause);
+        yieldClause_.reset(yield);
+        orderBy_.reset(order);
+        limit_.reset(limit);
+        kind_ = Kind::kSample;
+    }
+
+    FromClause* fromClause() const {
+        return fromClause_.get();
+    }
+
+    OverClause* overClause() const {
+        return overClause_.get();
+    }
+
+    const YieldClause* yieldClause() const {
+        return yieldClause_.get();
+    }
+
+    Expression* orderBy() const {
+        return orderBy_.get();
+    }
+
+    Expression* limit() const {
+        return limit_.get();
+    }
+
+    std::string toString() const override;
+
+private:
+    std::unique_ptr<FromClause>  fromClause_;
+    std::unique_ptr<OverClause>  overClause_;
+    std::unique_ptr<YieldClause> yieldClause_;
+    std::unique_ptr<Expression>  orderBy_;
+    std::unique_ptr<Expression>  limit_;
+
+};
 
 class UseSentence final : public Sentence {
 public:

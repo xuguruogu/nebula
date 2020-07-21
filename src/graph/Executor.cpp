@@ -62,6 +62,7 @@
 #include "graph/UserExecutor.h"
 #include "graph/PrivilegeExecutor.h"
 #include "graph/ScanExecutor.h"
+#include "graph/SampleExecutor.h"
 
 namespace nebula {
 namespace graph {
@@ -75,6 +76,9 @@ std::unique_ptr<Executor> Executor::makeExecutor(Sentence *sentence) {
             break;
         case Sentence::Kind::kScan:
             executor = std::make_unique<ScanExecutor>(sentence, ectx());
+            break;
+        case Sentence::Kind::kSample:
+            executor = std::make_unique<SampleExecutor>(sentence, ectx());
             break;
         case Sentence::Kind::kUse:
             executor = std::make_unique<UseExecutor>(sentence, ectx());

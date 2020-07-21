@@ -5,6 +5,7 @@ nebula_add_library(
     CommonUtils.cpp
     query/QueryBaseProcessor.cpp
     query/QueryBoundProcessor.cpp
+    query/QueryBoundSampleProcessor.cpp
     query/QueryVertexPropsProcessor.cpp
     query/QueryEdgePropsProcessor.cpp
     query/QueryStatsProcessor.cpp

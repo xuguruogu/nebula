@@ -6,28 +6,29 @@
 
 #include "storage/StorageServiceHandler.h"
 #include "base/Base.h"
-#include "storage/query/QueryBoundProcessor.h"
-#include "storage/query/QueryVertexPropsProcessor.h"
-#include "storage/query/QueryEdgePropsProcessor.h"
-#include "storage/query/QueryStatsProcessor.h"
-#include "storage/query/GetUUIDProcessor.h"
-#include "storage/query/ScanEdgeProcessor.h"
-#include "storage/query/ScanVertexProcessor.h"
-#include "storage/mutate/AddVerticesProcessor.h"
-#include "storage/mutate/AddEdgesProcessor.h"
-#include "storage/mutate/DeleteVerticesProcessor.h"
-#include "storage/mutate/DeleteEdgesProcessor.h"
-#include "storage/mutate/UpdateVertexProcessor.h"
-#include "storage/mutate/UpdateEdgeProcessor.h"
-#include "storage/kv/PutProcessor.h"
-#include "storage/kv/GetProcessor.h"
 #include "storage/admin/AdminProcessor.h"
 #include "storage/admin/CreateCheckpointProcessor.h"
 #include "storage/admin/DropCheckpointProcessor.h"
-#include "storage/admin/SendBlockSignProcessor.h"
-#include "storage/admin/RebuildTagIndexProcessor.h"
 #include "storage/admin/RebuildEdgeIndexProcessor.h"
+#include "storage/admin/RebuildTagIndexProcessor.h"
+#include "storage/admin/SendBlockSignProcessor.h"
 #include "storage/index/LookUpIndexProcessor.h"
+#include "storage/kv/GetProcessor.h"
+#include "storage/kv/PutProcessor.h"
+#include "storage/mutate/AddEdgesProcessor.h"
+#include "storage/mutate/AddVerticesProcessor.h"
+#include "storage/mutate/DeleteEdgesProcessor.h"
+#include "storage/mutate/DeleteVerticesProcessor.h"
+#include "storage/mutate/UpdateEdgeProcessor.h"
+#include "storage/mutate/UpdateVertexProcessor.h"
+#include "storage/query/GetUUIDProcessor.h"
+#include "storage/query/QueryBoundProcessor.h"
+#include "storage/query/QueryBoundSampleProcessor.h"
+#include "storage/query/QueryEdgePropsProcessor.h"
+#include "storage/query/QueryStatsProcessor.h"
+#include "storage/query/QueryVertexPropsProcessor.h"
+#include "storage/query/ScanEdgeProcessor.h"
+#include "storage/query/ScanVertexProcessor.h"
 
 #define RETURN_FUTURE(processor) \
     auto f = processor->getFuture(); \
@@ -49,6 +50,17 @@ StorageServiceHandler::future_getBound(const cpp2::GetNeighborsRequest& req) {
                                                     &getBoundQpsStat_,
                                                     readerPool_.get(),
                                                     &vertexCache_);
+    RETURN_FUTURE(processor);
+}
+
+
+folly::Future<cpp2::GetNeighborsSampleResponse>
+StorageServiceHandler::future_getBoundSample(const cpp2::GetNeighborsSampleRequest& req) {
+    auto* processor = QueryBoundSampleProcessor::instance(kvstore_,
+                                                          schemaMan_,
+                                                          &getBoundQpsStat_,
+                                                          readerPool_.get(),
+                                                          &vertexCache_);
     RETURN_FUTURE(processor);
 }
 

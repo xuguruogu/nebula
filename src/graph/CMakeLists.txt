@@ -13,6 +13,7 @@ nebula_add_library(
     SequentialExecutor.cpp
     UseExecutor.cpp
     GoExecutor.cpp
+    SampleExecutor.cpp
     PipeExecutor.cpp
     CreateEdgeExecutor.cpp
     AlterEdgeExecutor.cpp

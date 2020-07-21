@@ -78,6 +78,28 @@ std::string ScanSentence::toString() const {
     return buf;
 }
 
+std::string SampleSentence::toString() const {
+    std::string buf;
+    buf.reserve(256);
+    buf += "SAMPLE ";
+    if (fromClause_ != nullptr) {
+        buf += fromClause_->toString();
+    }
+    if (overClause_ != nullptr) {
+        buf += " ";
+        buf += overClause_->toString();
+    }
+    if (yieldClause_ != nullptr) {
+        buf += " ";
+        buf += yieldClause_->toString();
+    }
+    buf += " ";
+    buf += "ORDER BY " + orderBy()->toString();
+    buf += " ";
+    buf += "LIMIT " + limit()->toString();
+    return buf;
+}
+
 std::string UseSentence::toString() const {
     return "USE " + *space_;
 }

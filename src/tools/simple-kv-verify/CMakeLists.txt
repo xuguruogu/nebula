@@ -11,6 +11,7 @@ nebula_add_executable(
         $<TARGET_OBJECTS:wal_obj>
         $<TARGET_OBJECTS:raftex_obj>
         $<TARGET_OBJECTS:kvstore_obj>
+        $<TARGET_OBJECTS:graph_thrift_obj>
         $<TARGET_OBJECTS:storage_thrift_obj>
         $<TARGET_OBJECTS:meta_thrift_obj>
         $<TARGET_OBJECTS:raftex_thrift_obj>

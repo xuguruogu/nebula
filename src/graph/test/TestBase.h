@@ -227,6 +227,9 @@ protected:
             std::sort(expected.begin(), expected.end());
         }
         for (decltype(rows.size()) i = 0; i < rows.size(); ++i) {
+           LOG(ERROR) << rows[i] ;
+        }
+        for (decltype(rows.size()) i = 0; i < rows.size(); ++i) {
             if (rows[i] != expected[i]) {
                 return TestError() << rows[i] << " vs. " << expected[i];
             }
