@@ -681,7 +681,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectEdgeProps(
                                 "Edge `%s' not found when call getters.", edgeName.c_str());
                     }
                     if (std::abs(edgeType) != edgeFound->second) {
-                        return Status::Error("Ignore this edge");
+                        return Status::Error("Ignore this edge : %s", edgeFound->first.c_str());
                     }
 
                     if (prop == _SRC) {
@@ -712,7 +712,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectEdgeProps(
                                 "Edge `%s' not found when call getters.", edgeName.c_str());
                     }
                     if (std::abs(edgeType) != edgeFound->second) {
-                        return Status::Error("Ignore this edge");
+                        return Status::Error("Ignore this edge : %s", edgeFound->first.c_str());
                     }
                     return dstId;
                 };
@@ -727,6 +727,10 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectEdgeProps(
                     return it->second;
                 };
                 auto value = exp_->eval(getters);
+                if (!value.ok()) {
+                    VLOG(3) << value.status();
+                    continue;
+                }
                 if (value.ok() && !Expression::asBool(value.value())) {
                     VLOG(1) << "Filter the edge "
                             << vId << "-> " << dstId << "@" << rank << ":" << edgeType;
