@@ -117,7 +117,7 @@ TEST(StorageHttpIngestHandlerTest, StorageIngestTest) {
                                            FLAGS_ws_http_port, url);
         auto resp = http::HttpClient::get(request);
         ASSERT_TRUE(resp.ok());
-        ASSERT_EQ("SSTFile ingest failed", resp.value());
+        ASSERT_EQ("SSTFile ingest successfully", resp.value());
     }
     {
         auto url = "/ingest?space=0&tag=2";
@@ -125,7 +125,7 @@ TEST(StorageHttpIngestHandlerTest, StorageIngestTest) {
                                            FLAGS_ws_http_port, url);
         auto resp = http::HttpClient::get(request);
         ASSERT_TRUE(resp.ok());
-        ASSERT_EQ("SSTFile ingest failed", resp.value());
+        ASSERT_EQ("SSTFile ingest successfully", resp.value());
     }
 }
 
