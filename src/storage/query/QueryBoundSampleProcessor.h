@@ -62,7 +62,7 @@ private:
     int32_t getBucketsNum(int32_t verticesNum, int32_t minVerticesPerBucket,int32_t handlerNum);
 
 
-    std::priority_queue<Node> resultNodeHeap_;
+
     std::unique_ptr<nebula::Expression> orderBy_;
     int64_t limitSize_;
 

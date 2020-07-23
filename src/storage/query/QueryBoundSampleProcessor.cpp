@@ -62,6 +62,12 @@ void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& r
 
     // inputs
     inputs_ = std::move(const_cast<std::unordered_map<PartitionID, std::vector<nebula::graph::cpp2::RowValue>>&>(req.get_parts()));
+    for (auto& part : inputs_) {
+        auto partId = part.first;
+        auto& rows = part.second;
+        auto& result = sample_result_[partId];
+        result.resize(rows.size());
+    }
 
     auto retCode = buildContexts(req);
 
@@ -272,7 +278,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
     std::vector<std::string> srcTagContents;
     std::unordered_map<TagID, std::unique_ptr<RowReader>> srcTagReaderMap;
     std::unordered_map<std::string, nebula::graph::cpp2::ColumnValue> yieldVariableMap;
-
+    std::priority_queue<Node> resultNodeHeap;
 
     // TODO: add multiple version check
     for (auto& src_tag_schema : src_tag_schema_) {
@@ -319,6 +325,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
         }
     }
+
 
     // TODO: add multiple version check
     // edge props
@@ -382,7 +389,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             };
             getters.getInputProp = [this,&yieldVariableMap, &input_row] (const std::string& prop) -> OptVariantType {
                 auto propIdx= this->input_schema_->getFieldIndex(prop);
-                if (propIdx > 0) {
+                if (propIdx >= 0) {
                     auto& col = input_row.get_columns().at(propIdx);
                     return toVariantType(col);
                 }
@@ -391,12 +398,13 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                     auto& col = yieldVariableMap[prop];
                     return toVariantType(col);;
                 }
+
                 return Status::Error("Input Prop `%s' not found.", prop.c_str());
             };
 
             getters.getVariableProp = [this, &yieldVariableMap, &input_row] (const std::string& prop) -> OptVariantType {
                 auto propIdx= this->input_schema_->getFieldIndex(prop);
-                if (propIdx > 0) {
+                if (propIdx >= 0) {
                     auto& col = input_row.get_columns().at(propIdx);
                     return toVariantType(col);
                 }
@@ -468,15 +476,15 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             for (uint32_t index=0 ; index < yields_expr_.size(); index ++) {
                 auto& expr = yields_expr_[index];
                 if (!checkExp(expr.get())) {
-                    VLOG(3) << "check order by fail";
+                    VLOG(3) << "check yeild fail";
                     return kvstore::ResultCode::ERR_EXPR_FAILED;
                 }
                 auto exprStatus = expr->eval(getters);
                 if (!exprStatus.ok()) {
+                    VLOG(3) << "check yeild fail";
                     return kvstore::ResultCode::ERR_EXPR_FAILED;
                 }
                 auto col = toColumnValue(std::move(exprStatus).value());
-
                 yieldVariableMap[yields_[index].get_alias()] = col;
 
                 resultRow.push_back(std::move(col));
@@ -507,40 +515,57 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                     continue;
                 }
 
-                std::lock_guard<std::mutex> lg(this->lock_);
-                if(resultNodeHeap_.size() >= (uint64_t)limitSize_ && (priorityValue <= resultNodeHeap_.top().priority)) {
+                if(resultNodeHeap.size() >= (uint64_t)limitSize_ && (priorityValue <= resultNodeHeap.top().priority)) {
                     continue;
-                } else if (resultNodeHeap_.size() >= (uint64_t)limitSize_ && priorityValue > resultNodeHeap_.top().priority){
-                    resultNodeHeap_.pop();
+                }
+
+                if (resultNodeHeap.size() >= (uint64_t)limitSize_ && priorityValue > resultNodeHeap.top().priority){
+                    resultNodeHeap.pop();
                 }
                 // if minHeapNode.size() < (uint64_t)limitSize_
                 Node node;
                 node.priority = priorityValue;
                 node.row = row;
-                resultNodeHeap_.push(node);
+                resultNodeHeap.push(node);
             } else {
                 // order by must be provided
                 return kvstore::ResultCode::ERR_INVALID_ARGUMENT;
             }
 
         } // end iter
-
     }
 
+
+
+    std::vector<nebula::graph::cpp2::RowValue> rows;
+    rows.reserve(limitSize_);
+    while( !resultNodeHeap.empty()) {
+        Node node = resultNodeHeap.top();
+        resultNodeHeap.pop();
+        rows.push_back(std::move(node.row));
+    }
+    {
+        std::lock_guard<std::mutex> lg(this->lock_);
+        sample_result_[partId][idx]= std::move(rows);
+    }
     return kvstore::ResultCode::SUCCEEDED;
 }
 
 void QueryBoundSampleProcessor::onProcessFinished() {
     // collect the result
+
     uint64_t num = 0;
     std::vector<nebula::graph::cpp2::RowValue> rows;
-    num = resultNodeHeap_.size();
-
+    for (auto& part : sample_result_) {
+        for (auto& list : part.second) {
+            num += list.size();
+        }
+    }
     rows.reserve(num);
-    while( !resultNodeHeap_.empty()) {
-        Node node = resultNodeHeap_.top();
-        resultNodeHeap_.pop();
-        rows.push_back(std::move(node.row));
+    for (auto& part : sample_result_) {
+        for (auto& list : part.second) {
+            rows.insert(rows.end(), std::make_move_iterator(list.begin()), std::make_move_iterator(list.end()));
+        }
     }
 
     std::vector<std::string> columns_names;

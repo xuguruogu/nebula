@@ -98,7 +98,7 @@ TEST_F(SampleTest, TwoStepSample) {
         auto &player = players_["Boris Diaw"];
         auto *fmt =
             "Go FROM %ld OVER like YIELD like._dst as id "
-            "| SAMPLE  FROM $-.id OVER like YIELD  like._dst  ORDER BY like.likeness * 3 LIMIT 4";
+            "| SAMPLE  FROM $-.id OVER like YIELD  like._dst  ORDER BY like.likeness * 3 LIMIT 2";
         auto query = folly::stringPrintf(fmt, player.vid());
         auto code = client_->execute(query, resp);
         ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
@@ -167,7 +167,7 @@ TEST_F(SampleTest, TwoStepSample) {
         auto &player = players_["Boris Diaw"];
         auto *fmt =
             "SAMPLE FROM %ld OVER like YIELD like._dst as id ORDER BY rand32() LIMIT 2 "
-            "| SAMPLE  FROM $-.id OVER like YIELD like._dst as id , like.likeness * 10.0 as val ORDER BY $-.val LIMIT 4";
+            "| SAMPLE  FROM $-.id OVER like YIELD like._dst as id , like.likeness * 10.0 as val ORDER BY $-.val LIMIT 2";
         auto query = folly::stringPrintf(fmt, player.vid());
         auto code = client_->execute(query, resp);
         ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
@@ -185,14 +185,35 @@ TEST_F(SampleTest, TwoStepSample) {
         };
         ASSERT_TRUE(verifyResult(resp, expected));
     }
+
+
 }
 
-TEST_F(SampleTest, DuplicateColumn) {
+TEST_F(SampleTest, fetchInputProp) {
     {
+        cpp2::ExecutionResponse resp;
+        auto &player = players_["Boris Diaw"];
+        auto *fmt =
+            "SAMPLE FROM %ld OVER like YIELD like._src as src_id, like._dst as id ORDER BY rand32() LIMIT 2 "
+            "| SAMPLE  FROM $-.id OVER like YIELD $-.src_id as src , like._src as hop , like._dst as dst  ORDER BY  like.likeness * 10.0 LIMIT 2";
+        auto query = folly::stringPrintf(fmt, player.vid());
+        auto code = client_->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
 
+        std::vector<std::string> expectedColNames{
+            {"src"},  {"hop"}, {"dst"}
+        };
+        ASSERT_TRUE(verifyColNames(resp, expectedColNames));
+
+        std::vector<std::tuple<int64_t, int64_t, int64_t>> expected = {
+            {players_["Boris Diaw"].vid(), players_["Tony Parker"].vid(), players_["Tim Duncan"].vid() },
+            {players_["Boris Diaw"].vid(), players_["Tony Parker"].vid(), players_["Manu Ginobili"].vid()},
+            {players_["Boris Diaw"].vid(), players_["Tim Duncan"].vid(), players_["Tony Parker"].vid()},
+            {players_["Boris Diaw"].vid(), players_["Tim Duncan"].vid(), players_["Manu Ginobili"].vid()},
+        };
+        ASSERT_TRUE(verifyResult(resp, expected));
     }
 }
-
 
 
 } //graph
