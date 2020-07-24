@@ -64,7 +64,7 @@ static std::shared_ptr<rocksdb::Cache> _blockCache() {
     std::unique_lock<std::mutex> l(mutex);
     if (!cache) {
         LOG(INFO) << "create block cache: " << FLAGS_rocksdb_block_cache << "MB";
-        cache = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 8);
+        cache = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 16);
     }
     return cache;
 }

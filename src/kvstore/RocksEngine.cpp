@@ -12,6 +12,8 @@
 #include "kvstore/RocksEngineConfig.h"
 #include <rocksdb/convenience.h>
 
+DEFINE_bool(enable_auto_repair, false, "True for auto repair db.");
+
 namespace nebula {
 namespace kvstore {
 
@@ -100,6 +102,11 @@ RocksEngine::RocksEngine(GraphSpaceID spaceId,
         options.compaction_filter_factory = cfFactory;
     }
     status = rocksdb::DB::Open(options, path, &db);
+    if (FLAGS_enable_auto_repair && !status.ok()) {
+        LOG(ERROR) << "try repair db. [" << status.ToString() << "] -> ["
+                   << rocksdb::RepairDB(path, options).ToString() << "]";
+        status = rocksdb::DB::Open(options, path, &db);
+    }
     CHECK(status.ok()) << status.ToString();
     db_.reset(db);
     partsNum_ = allParts().size();
@@ -345,6 +352,7 @@ ResultCode RocksEngine::ingest(const std::vector<std::string>& files) {
     options.move_files = true;
     options.failed_move_fall_back_to_copy = false;
     options.verify_checksums_before_ingest = true;
+    options.write_global_seqno = false;
     rocksdb::Status status = db_->IngestExternalFile(files, options);
     if (status.ok()) {
         return ResultCode::SUCCEEDED;
