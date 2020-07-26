@@ -143,12 +143,12 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
 //    baseOpts.table_cache_numshardbits = 8;
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
     baseOpts.compression_per_level = std::vector<rocksdb::CompressionType> {
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
+        rocksdb::CompressionType::kNoCompression,
         rocksdb::CompressionType::kSnappyCompression,
         rocksdb::CompressionType::kSnappyCompression,
-        rocksdb::CompressionType::kSnappyCompression,
-        rocksdb::CompressionType::kSnappyCompression,
-        rocksdb::CompressionType::kZSTD,
-        rocksdb::CompressionType::kZSTD,
         rocksdb::CompressionType::kZSTD,
     };
     baseOpts.compaction_style = rocksdb::kCompactionStyleUniversal;
