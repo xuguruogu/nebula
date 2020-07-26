@@ -125,7 +125,6 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
 
     bbtOpts.block_cache = _blockCache();
     bbtOpts.whole_key_filtering = false;
-    bbtOpts.enable_index_compression = true;
     bbtOpts.format_version = 5;
     if (FLAGS_enable_partitioned_index_filter) {
         bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
@@ -155,13 +154,10 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     baseOpts.compaction_options_universal.allow_trivial_move = true;
     baseOpts.compaction_options_universal.max_size_amplification_percent = 50;
     baseOpts.compaction_thread_limiter = _compaction_thread_limiter();
-    baseOpts.dump_malloc_stats = true;
-    baseOpts.report_bg_io_stats = true;
     baseOpts.memtable_insert_with_hint_prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(12));
     baseOpts.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(12));
-    baseOpts.memtable_whole_key_filtering = false;
+    baseOpts.memtable_whole_key_filtering = true;
     baseOpts.create_if_missing = true;
-    baseOpts.level_compaction_dynamic_level_bytes = true;
 
     return s;
 }
