@@ -155,9 +155,9 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     baseOpts.compaction_options_universal.max_size_amplification_percent = 50;
     baseOpts.compaction_thread_limiter = _compaction_thread_limiter();
     baseOpts.memtable_insert_with_hint_prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(16));
+        rocksdb::NewCappedPrefixTransform(16));
     baseOpts.prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(16));
+        rocksdb::NewCappedPrefixTransform(16));
     baseOpts.memtable_whole_key_filtering = true;
     baseOpts.create_if_missing = true;
 
