@@ -353,6 +353,8 @@ ResultCode RocksEngine::ingest(const std::vector<std::string>& files) {
     options.failed_move_fall_back_to_copy = false;
     options.verify_checksums_before_ingest = true;
     options.write_global_seqno = false;
+    options.snapshot_consistency = true;
+    options.allow_global_seqno = true;
     rocksdb::Status status = db_->IngestExternalFile(files, options);
     if (status.ok()) {
         return ResultCode::SUCCEEDED;
