@@ -128,6 +128,10 @@ protected:
     folly::Optional<int64_t> getEdgeActiveVersionsInfo(EdgeType edgeType);
     folly::Optional<int64_t> getEdgeMaxVersionsInfo(EdgeType edgeType);
 
+    bool multiVersionsCheckTag(TagID tagID, TagVersion tagVersion);
+
+    bool multiVersionsCheckEdge(EdgeType edgeType, EdgeVersion edgeVersion);
+
     bool multiVersionsCheck(folly::StringPiece key);
 protected:
     GraphSpaceID  spaceId_;

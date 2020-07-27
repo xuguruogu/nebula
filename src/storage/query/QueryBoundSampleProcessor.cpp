@@ -261,9 +261,11 @@ QueryBoundSampleProcessor::asyncProcessBucket(BucketWithIndex bucket) {
         std::vector<OneVertexResp> codes;
         codes.reserve(b.vertices_.size());
         for (auto& pv : b.vertices_) {
-            codes.emplace_back(std::get<0>(pv),
-                               std::get<1>(pv),
-                               processVertex(std::get<0>(pv), std::get<1>(pv), std::get<2>(pv)));
+            codes.emplace_back(
+                std::get<0>(pv),
+                std::get<1>(pv),
+                processVertex(std::get<0>(pv), std::get<1>(pv), std::get<2>(pv))
+            );
         }
         p.setValue(std::move(codes));
     });
@@ -287,15 +289,23 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
             auto result = vertexCache_->get(std::make_pair(vId, srcTagId), partId);
             if (result.ok()) {
-                srcTagContents.emplace_back(std::move(result).value());
-                auto& v = srcTagContents.back();
-                auto srcTagReader = RowReader::getTagPropReader(this->schemaMan_, v, spaceId_, srcTagId);
-                if (srcTagReader == nullptr) {
-                    return kvstore::ResultCode::ERR_CORRUPT_DATA;
+                std::pair<TagVersion, folly::Optional<std::string>> v
+                    = std::move(result).value();
+                // TagVersion tagVersion = v.first;
+                folly::Optional<std::string>& row = v.second;
+                if (!row.hasValue()) {
+                    VLOG(3) << "Missed partId " << partId << ", vId " << vId << ", tagId " << srcTagId;
+                    return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
+                } else {
+                    srcTagContents.emplace_back(std::move(row.value()));
+                    auto srcTagReader = RowReader::getTagPropReader(
+                        this->schemaMan_, srcTagContents.back(), spaceId_, srcTagId);
+                    if (srcTagReader == nullptr) {
+                        return kvstore::ResultCode::ERR_CORRUPT_DATA;
+                    }
+                    srcTagReaderMap[srcTagId] = std::move(srcTagReader);
+                    VLOG(3) << "Hit cache for vId " << vId << ", srcTagId " << srcTagId;
                 }
-
-                srcTagReaderMap[srcTagId] = std::move(srcTagReader);
-                VLOG(3) << "Hit cache for vId " << vId << ", srcTagId " << srcTagId;
                 continue;
             } else {
                 VLOG(3) << "Miss cache for vId " << vId << ", srcTagId " << srcTagId;
@@ -311,17 +321,33 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
         }
 
         if (iter && iter->valid()) {
+            TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(iter->key());
             auto srcTagReader = RowReader::getTagPropReader(this->schemaMan_, iter->val(), spaceId_, srcTagId);
             if (srcTagReader == nullptr) {
                 return kvstore::ResultCode::ERR_CORRUPT_DATA;
             }
             srcTagReaderMap[srcTagId] = std::move(srcTagReader);
             if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-                vertexCache_->insert(std::make_pair(vId, srcTagId), iter->val().str(), partId);
+                vertexCache_->insert(
+                    std::make_pair(vId, srcTagId),
+                    std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str())),
+                    partId
+                );
                 VLOG(3) << "Insert cache for vId " << vId << ", srcTagId " << srcTagId;
             }
         } else {
-            VLOG(3) << "Missed partId " << partId << ", vId " << vId << ", srcTagId " << srcTagId;
+            if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
+                auto tagVersion = folly::Endian::big(
+                    std::numeric_limits<int64_t>::max() - time::WallClock::fastNowInMicroSec());
+                vertexCache_->insert(
+                    std::make_pair(vId, srcTagId),
+                    std::make_pair(tagVersion, folly::Optional<std::string>()),
+                    partId
+                );
+            }
+            VLOG(3) << "Missed partId " << partId
+                    << ", vId " << vId
+                    << ", srcTagId " << srcTagId;
             return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
         }
     }

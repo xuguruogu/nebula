@@ -127,8 +127,9 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
             VLOG(3) << "Schema not found for tag id: " << tagId;
             continue;
         }
+        TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(key);
         // Check if ttl data expired
-        if (!multiVersionsCheck(key)) {
+        if (!multiVersionsCheckTag(tagId, tagVersion)) {
             VLOG(3) << "Only get the active version for each tag.";
             continue;
         }
@@ -156,8 +157,11 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
         }
         auto valStr = val.str();
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-            vertexCache_->insert(std::make_pair(vId, tagId),
-                                 valStr, partId);
+            vertexCache_->insert(
+                std::make_pair(vId, tagId),
+                std::make_pair(tagVersion, folly::Optional<std::string>(valStr)),
+                partId
+            );
             VLOG(3) << "Insert cache for vId " << vId << ", tagId " << tagId;
         }
         cpp2::TagData td;

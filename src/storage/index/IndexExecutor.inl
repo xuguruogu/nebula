@@ -184,15 +184,25 @@ kvstore::ResultCode IndexExecutor<RESP>::getVertexRow(PartitionID partId,
     if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
         auto result = vertexCache_->get(std::make_pair(vId, tagOrEdge_), partId);
         if (result.ok()) {
-            auto v = std::move(result).value();
-            auto reader = RowReader::getTagPropReader(schemaMan_, v, spaceId_, tagOrEdge_);
-            if (reader == nullptr) {
-                return kvstore::ResultCode::ERR_CORRUPT_DATA;
+            std::pair<TagVersion, folly::Optional<std::string>> v
+                = std::move(result).value();
+            // TagVersion tagVersion =v.first;
+            folly::Optional<std::string>& row = v.second;
+            if (!row.hasValue()) {
+                VLOG(3) << "Missed partId " << partId
+                        << ", vId " << vId
+                        << ", tagId " << tagOrEdge_;
+                return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
+            } else {
+                auto reader = RowReader::getTagPropReader(
+                    schemaMan_, row.value(), spaceId_, tagOrEdge_);
+                if (reader == nullptr) {
+                    return kvstore::ResultCode::ERR_CORRUPT_DATA;
+                }
+                data->set_props(getRowFromReader(reader.get()));
+                VLOG(3) << "Hit cache for vId " << vId << ", tagId " << tagOrEdge_;
+                return kvstore::ResultCode::SUCCEEDED;
             }
-            auto row = getRowFromReader(reader.get());
-            data->set_props(std::move(row));
-            VLOG(3) << "Hit cache for vId " << vId << ", tagId " << tagOrEdge_;
-            return kvstore::ResultCode::SUCCEEDED;
         } else {
             VLOG(3) << "Miss cache for vId " << vId << ", tagId " << tagOrEdge_;
         }
@@ -205,6 +215,7 @@ kvstore::ResultCode IndexExecutor<RESP>::getVertexRow(PartitionID partId,
         return ret;
     }
     if (iter && iter->valid()) {
+        TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(iter->key());
         auto reader = RowReader::getTagPropReader(schemaMan_,
                                                   iter->val(),
                                                   spaceId_,
@@ -215,12 +226,26 @@ kvstore::ResultCode IndexExecutor<RESP>::getVertexRow(PartitionID partId,
         auto row = getRowFromReader(reader.get());
         data->set_props(std::move(row));
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-            vertexCache_->insert(std::make_pair(vId, tagOrEdge_),
-                                 iter->val().str(), partId);
+            vertexCache_->insert(
+                std::make_pair(vId, tagOrEdge_),
+                std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str())),
+                partId
+            );
             VLOG(3) << "Insert cache for vId " << vId << ", tagId " << tagOrEdge_;
         }
     } else {
-        LOG(ERROR) << "Missed partId " << partId << ", vId " << vId << ", tagId " << tagOrEdge_;
+        if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
+            auto tagVersion = folly::Endian::big(
+                std::numeric_limits<int64_t>::max() - time::WallClock::fastNowInMicroSec());
+            vertexCache_->insert(
+                std::make_pair(vId, tagOrEdge_),
+                std::make_pair(tagVersion, folly::Optional<std::string>()),
+                partId
+            );
+        }
+        LOG(ERROR) << "Missed partId " << partId
+                   << ", vId " << vId
+                   << ", tagId " << tagOrEdge_;
         return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
     }
     return ret;

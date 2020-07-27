@@ -214,7 +214,7 @@ public:
                 // cache is full, evict the least recently used item
                 evict();
             }
-            VLOG(3) << "Insert key " << key << ", val " << value;
+            // VLOG(3) << "Insert key " << key << ", val " << value;
             // insert the new item
             list_.push_front(key);
             map_.emplace(std::forward<key_type>(key),
@@ -245,7 +245,7 @@ public:
             j = list_.begin();
             std::get<1>(i->second) = j;
         }
-        VLOG(3) << "Get key : " << key << ", val: " << value;
+        // VLOG(3) << "Get key : " << key << ", val: " << value;
         hits_++;
         return value;
     }

@@ -238,27 +238,43 @@ QueryBaseProcessor<REQ, RESP>::getEdgeMaxVersionsInfo(EdgeType edgeType) {
 
 template<typename REQ, typename RESP>
 bool
+QueryBaseProcessor<REQ, RESP>::multiVersionsCheckTag(TagID tagID, TagVersion tagVersion) {
+    auto tagActiveVersion = getTagActiveVersionsInfo(tagID);
+    auto tagMaxVersion = getTagMaxVersionsInfo(tagID);
+    if (tagActiveVersion.has_value() || tagMaxVersion.has_value()) {
+        return ((tagMaxVersion.has_value() &&
+                 tagVersion <= tagMaxVersion.value()) ||
+                (tagActiveVersion.has_value() &&
+                 tagVersion == tagActiveVersion.value()));
+    }
+    return true;
+}
+
+template<typename REQ, typename RESP>
+bool
+QueryBaseProcessor<REQ, RESP>::multiVersionsCheckEdge(EdgeType edgeType, EdgeVersion edgeVersion) {
+    auto edgeActiveVersion = getEdgeActiveVersionsInfo(edgeType);
+    auto edgeMaxVersion = getEdgeMaxVersionsInfo(edgeType);
+    if (edgeActiveVersion.has_value() || edgeMaxVersion.has_value()) {
+        return ((edgeMaxVersion.has_value() &&
+                 edgeVersion <= edgeMaxVersion.value()) ||
+                (edgeActiveVersion.has_value() &&
+                 edgeVersion == edgeActiveVersion.value()));
+    }
+    return true;
+}
+
+template<typename REQ, typename RESP>
+bool
 QueryBaseProcessor<REQ, RESP>::multiVersionsCheck(folly::StringPiece key) {
     if (NebulaKeyUtils::isEdge(key)) {
         EdgeType edgeType = NebulaKeyUtils::getEdgeType(key);
-        auto edgeActiveVersion = getEdgeActiveVersionsInfo(edgeType);
-        auto edgeMaxVersion = getEdgeMaxVersionsInfo(edgeType);
-        if (edgeActiveVersion.has_value() || edgeMaxVersion.has_value()) {
-            return ((edgeMaxVersion.has_value() &&
-                     NebulaKeyUtils::getVersionBigEndian(key) <= edgeMaxVersion.value()) ||
-                    (edgeActiveVersion.has_value() &&
-                     NebulaKeyUtils::getVersionBigEndian(key) == edgeActiveVersion.value()));
-        }
+        EdgeVersion edgeVersion = NebulaKeyUtils::getVersionBigEndian(key);
+        return multiVersionsCheckEdge(edgeType, edgeVersion);
     } else if (NebulaKeyUtils::isVertex(key)) {
         TagID tagID = NebulaKeyUtils::getTagId(key);
-        auto tagActiveVersion = getTagActiveVersionsInfo(tagID);
-        auto tagMaxVersion = getTagMaxVersionsInfo(tagID);
-        if (tagActiveVersion.has_value() || tagMaxVersion.has_value()) {
-            return ((tagMaxVersion.has_value() &&
-                     NebulaKeyUtils::getVersionBigEndian(key) <= tagMaxVersion.value()) ||
-                    (tagActiveVersion.has_value() &&
-                     NebulaKeyUtils::getVersionBigEndian(key) == tagActiveVersion.value()));
-        }
+        TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(key);
+        return multiVersionsCheckTag(tagID, tagVersion);
     }
     return true;
 }
@@ -480,31 +496,47 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
                             Collector* collector) {
     auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
     if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-        auto result = vertexCache_->get(std::make_pair(vId, tagId), partId);
-        std::string v;
-        if (result.ok() && multiVersionsCheck(v = std::move(result).value())) {
-            auto reader = RowReader::getTagPropReader(this->schemaMan_, v, spaceId_, tagId);
-            if (reader == nullptr) {
-                return kvstore::ResultCode::ERR_CORRUPT_DATA;
-            }
-
-            // Check if ttl data expired
-            auto retTtlOpt = getTagTTLInfo(tagId);
-            if (retTtlOpt.hasValue()) {
-                auto ttlValue = retTtlOpt.value();
-                if (checkDataExpiredForTTL(schema.get(),
-                                           reader.get(),
-                                           ttlValue.first,
-                                           ttlValue.second)) {
-                    VLOG(3) << "Hit cache for vId " << vId << ", tagId "
-                            << tagId <<", but data expired";
-                    return kvstore::ResultCode::SUCCEEDED;
+        std::pair<VertexID, TagID> cacheKey = std::make_pair(vId, tagId);
+        auto result = vertexCache_->get(cacheKey, partId);
+        if (result.ok()) {
+            std::pair<TagVersion, folly::Optional<std::string>> v
+                = std::move(result).value();
+            TagVersion tagVersion =v.first;
+            folly::Optional<std::string>& row = v.second;
+            if (!multiVersionsCheckTag(tagId, tagVersion)) {
+                VLOG(3) << "Hit cache for vId "
+                        << vId << ", tagId "
+                        << tagId << ", version "
+                        << tagVersion << ", but mutli version check failed.";
+                vertexCache_->evict(cacheKey, partId);
+            } else if (!row.hasValue()) {
+                VLOG(3) << "Missed partId " << partId << ", vId " << vId << ", tagId " << tagId;
+                return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
+            } else {
+                auto reader = RowReader::getTagPropReader(
+                    this->schemaMan_, row.value(), spaceId_, tagId);
+                if (reader == nullptr) {
+                    return kvstore::ResultCode::ERR_CORRUPT_DATA;
                 }
-            }
 
-            this->collectProps(reader.get(), "", props, fcontext, collector);
-            VLOG(3) << "Hit cache for vId " << vId << ", tagId " << tagId;
-            return kvstore::ResultCode::SUCCEEDED;
+                // Check if ttl data expired
+                auto retTtlOpt = getTagTTLInfo(tagId);
+                if (retTtlOpt.hasValue()) {
+                    auto ttlValue = retTtlOpt.value();
+                    if (checkDataExpiredForTTL(schema.get(),
+                                               reader.get(),
+                                               ttlValue.first,
+                                               ttlValue.second)) {
+                        VLOG(3) << "Hit cache for vId " << vId << ", tagId "
+                                << tagId <<", but data expired";
+                        return kvstore::ResultCode::SUCCEEDED;
+                    }
+                }
+
+                this->collectProps(reader.get(), "", props, fcontext, collector);
+                VLOG(3) << "Hit cache for vId " << vId << ", tagId " << tagId;
+                return kvstore::ResultCode::SUCCEEDED;
+            }
         } else {
             VLOG(3) << "Miss cache for vId " << vId << ", tagId " << tagId;
         }
@@ -525,9 +557,10 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
     }
 
     if (iter && iter->valid()) {
+        TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(iter->key());
         VLOG(4) << "collectVertexProps: partId " << partId
                 << " vId " << vId << " tagId " << tagId
-                << " version " << NebulaKeyUtils::getVersionBigEndian(iter->key());
+                << " version " << tagVersion;
         auto reader = RowReader::getTagPropReader(this->schemaMan_, iter->val(), spaceId_, tagId);
         if (reader == nullptr) {
             return kvstore::ResultCode::ERR_CORRUPT_DATA;
@@ -545,12 +578,28 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
         }
         this->collectProps(reader.get(), iter->key(), props, fcontext, collector);
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-            vertexCache_->insert(std::make_pair(vId, tagId),
-                                 iter->val().str(), partId);
-            VLOG(3) << "Insert cache for vId " << vId << ", tagId " << tagId;
+            //TODO: cache consistency
+            vertexCache_->insert(
+                std::make_pair(vId, tagId),
+                std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str())),
+                partId
+            );
+            VLOG(3) << "Insert cache for vId " << vId
+                    << ", tagId " << tagId;
         }
     } else {
-        VLOG(3) << "Missed partId " << partId << ", vId " << vId << ", tagId " << tagId;
+        //TODO: cache consistency
+        if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
+            auto tagVersion = folly::Endian::big(
+                std::numeric_limits<int64_t>::max() - time::WallClock::fastNowInMicroSec());
+            vertexCache_->insert(
+                std::make_pair(vId, tagId),
+                std::make_pair(tagVersion, folly::Optional<std::string>()),
+                partId
+            );
+        }
+        VLOG(3) << "Missed partId " << partId
+                << ", vId " << vId << ", tagId " << tagId;
         return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
     }
     return ret;
