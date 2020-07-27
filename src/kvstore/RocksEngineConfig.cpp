@@ -18,7 +18,7 @@
 
 // [WAL]
 DEFINE_bool(rocksdb_disable_wal,
-            true,
+            false,
             "Whether to disable the WAL in rocksdb");
 
 DEFINE_bool(rocksdb_wal_sync,
@@ -53,31 +53,66 @@ DEFINE_int64(rocksdb_block_cache, 1024,
 
 DEFINE_bool(enable_partitioned_index_filter, false, "True for partitioned index filters");
 
+DEFINE_string(rocksdb_compression, "snappy", "Compression algorithm used by RocksDB, "
+                                             "options: no,snappy,lz4,lz4hc,zstd,zlib,bzip2");
+DEFINE_string(rocksdb_compression_per_level, "", "Specify per level compression algorithm, "
+                                                 "delimited by `:', ignored fields will be "
+                                                 "replaced by FLAGS_rocksdb_compression. "
+                                                 "e.g. \"no:no:lz4:lz4::zstd\" === "
+                                                 "\"no:no:lz4:lz4:lz4:snappy:zstd:snappy\"");
+
+DEFINE_bool(enable_rocksdb_statistics, false, "Whether or not to enable rocksdb's statistics");
+DEFINE_string(rocksdb_stats_level, "kExceptHistogramOrTimers", "rocksdb statistics level");
+
 DEFINE_int32(num_compaction_threads, 16, "Number of IO threads");
 
 namespace nebula {
 namespace kvstore {
 
-static std::shared_ptr<rocksdb::Cache> _blockCache() {
-    static std::mutex mutex;
-    static std::shared_ptr<rocksdb::Cache> cache;
-    std::unique_lock<std::mutex> l(mutex);
-    if (!cache) {
-        LOG(INFO) << "create block cache: " << FLAGS_rocksdb_block_cache << "MB";
-        cache = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 16);
-    }
-    return cache;
-}
+static rocksdb::Status initRocksdbCompression(rocksdb::Options &baseOpts) {
+    static std::unordered_map<std::string, rocksdb::CompressionType> m = {
+        { "no", rocksdb::kNoCompression },
+        { "snappy", rocksdb::kSnappyCompression },
+        { "lz4", rocksdb::kLZ4Compression },
+        { "lz4hc", rocksdb::kLZ4HCCompression },
+        { "zstd", rocksdb::kZSTD },
+        { "zlib", rocksdb::kZlibCompression },
+        { "bzip2", rocksdb::kBZip2Compression }
+    };
 
-static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> _compaction_thread_limiter() {
-    static std::mutex mutex;
-    static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter;
-    std::unique_lock<std::mutex> l(mutex);
-    if (!compaction_thread_limiter) {
-        LOG(INFO) << "create thread limiter: " << FLAGS_num_compaction_threads;
-        compaction_thread_limiter.reset(rocksdb::NewConcurrentTaskLimiter("compaction", FLAGS_num_compaction_threads));
+    // Set the general compression algorithm
+    {
+        auto it = m.find(FLAGS_rocksdb_compression);
+        if (it == m.end()) {
+            LOG(ERROR) << "Unsupported compression type: " << FLAGS_rocksdb_compression;
+            return rocksdb::Status::InvalidArgument();
+        }
+        baseOpts.compression = it->second;
     }
-    return compaction_thread_limiter;
+    if (FLAGS_rocksdb_compression_per_level.empty()) {
+        return rocksdb::Status::OK();
+    }
+
+    // Set the per level compression algorithm, which will override the general one.
+    // Given baseOpts.compression is lz4, "no:::::zstd" equals to "no:lz4:lz4:lz4:lz4:zstd:lz4"
+    std::vector<std::string> compressions;
+    folly::split(":", FLAGS_rocksdb_compression_per_level, compressions, false);
+    compressions.resize(baseOpts.num_levels);
+    baseOpts.compression_per_level.resize(baseOpts.num_levels);
+    for (auto i = 0u; i < compressions.size(); i++) {
+        if (compressions[i].empty()) {
+            compressions[i] = FLAGS_rocksdb_compression;
+        }
+        auto it = m.find(compressions[i]);
+        if (it == m.end()) {
+            LOG(ERROR) << "Unsupported compression type: " << compressions[i];
+            return rocksdb::Status::InvalidArgument();
+        }
+        baseOpts.compression_per_level[i] = it->second;
+    }
+    LOG(INFO) << "compression per level: " << folly::join(":", compressions);
+
+    return rocksdb::Status::OK();
 }
 
 rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
@@ -88,79 +123,66 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
 
     std::unordered_map<std::string, std::string> dbOptsMap;
     if (!loadOptionsMap(dbOptsMap, FLAGS_rocksdb_db_options)) {
-        LOG(ERROR) << ".....loadOptionsMap FLAGS_rocksdb_db_options error. ";
         return rocksdb::Status::InvalidArgument();
     }
     s = GetDBOptionsFromMap(rocksdb::DBOptions(), dbOptsMap, &dbOpts, true);
     if (!s.ok()) {
-        LOG(ERROR) << ".....GetDBOptionsFromMap error. " << s.ToString();
         return s;
+    }
+    std::shared_ptr<rocksdb::Statistics> stats = getDBStatistics();
+    if (stats) {
+        dbOpts.statistics = std::move(stats);
     }
     dbOpts.listeners.emplace_back(new EventListener());
 
     std::unordered_map<std::string, std::string> cfOptsMap;
     if (!loadOptionsMap(cfOptsMap, FLAGS_rocksdb_column_family_options)) {
-        LOG(ERROR) << ".....loadOptionsMap FLAGS_rocksdb_column_family_options error. ";
         return rocksdb::Status::InvalidArgument();
     }
     s = GetColumnFamilyOptionsFromMap(rocksdb::ColumnFamilyOptions(), cfOptsMap, &cfOpts, true);
     if (!s.ok()) {
-        LOG(ERROR) << ".....GetColumnFamilyOptionsFromMap error. " << s.ToString();
         return s;
     }
 
     baseOpts = rocksdb::Options(dbOpts, cfOpts);
 
+    s = initRocksdbCompression(baseOpts);
+    if (!s.ok()) {
+        return s;
+    }
+
     std::unordered_map<std::string, std::string> bbtOptsMap;
     if (!loadOptionsMap(bbtOptsMap, FLAGS_rocksdb_block_based_table_options)) {
-        LOG(ERROR) << ".....loadOptionsMap FLAGS_rocksdb_block_based_table_options error. ";
         return rocksdb::Status::InvalidArgument();
     }
     s = GetBlockBasedTableOptionsFromMap(rocksdb::BlockBasedTableOptions(), bbtOptsMap,
                                          &bbtOpts, true);
     if (!s.ok()) {
-        LOG(ERROR) << ".....GetBlockBasedTableOptionsFromMap error. " << s.ToString();
         return s;
     }
 
-    bbtOpts.block_cache = _blockCache();
-    bbtOpts.whole_key_filtering = false;
-    bbtOpts.format_version = 5;
-    if (FLAGS_enable_partitioned_index_filter) {
-        bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
-        bbtOpts.partition_filters = true;
-        bbtOpts.index_type = rocksdb::BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
-        bbtOpts.pin_l0_filter_and_index_blocks_in_cache = true;
-        bbtOpts.pin_top_level_index_and_filter = true;
-        bbtOpts.cache_index_and_filter_blocks = true;
-        bbtOpts.cache_index_and_filter_blocks_with_high_priority = true;
+    if (FLAGS_rocksdb_block_cache <= 0) {
+        bbtOpts.no_block_cache = true;
     } else {
-        bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, true));
+        static std::shared_ptr<rocksdb::Cache> blockCache
+            = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 8/*shard bits*/);
+        bbtOpts.block_cache = blockCache;
     }
 
-//    baseOpts.optimize_filters_for_hits = true;
-//    baseOpts.table_cache_numshardbits = 8;
+    bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+    if (FLAGS_enable_partitioned_index_filter) {
+        bbtOpts.index_type = rocksdb::BlockBasedTableOptions::IndexType::kTwoLevelIndexSearch;
+        bbtOpts.partition_filters = true;
+        bbtOpts.cache_index_and_filter_blocks = true;
+        bbtOpts.cache_index_and_filter_blocks_with_high_priority = true;
+        bbtOpts.pin_l0_filter_and_index_blocks_in_cache =
+            baseOpts.compaction_style == rocksdb::CompactionStyle::kCompactionStyleLevel;
+    }
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
-    baseOpts.compression_per_level = std::vector<rocksdb::CompressionType> {
-        rocksdb::CompressionType::kNoCompression,
-        rocksdb::CompressionType::kNoCompression,
-        rocksdb::CompressionType::kNoCompression,
-        rocksdb::CompressionType::kNoCompression,
-        rocksdb::CompressionType::kSnappyCompression,
-        rocksdb::CompressionType::kSnappyCompression,
-        rocksdb::CompressionType::kZSTD,
-    };
-    baseOpts.compaction_style = rocksdb::kCompactionStyleUniversal;
-    baseOpts.compaction_options_universal.allow_trivial_move = true;
-    baseOpts.compaction_options_universal.max_size_amplification_percent = 50;
-    baseOpts.compaction_thread_limiter = _compaction_thread_limiter();
-    baseOpts.memtable_insert_with_hint_prefix_extractor.reset(
-        rocksdb::NewCappedPrefixTransform(16));
-    baseOpts.prefix_extractor.reset(
-        rocksdb::NewCappedPrefixTransform(16));
-    baseOpts.memtable_whole_key_filtering = true;
     baseOpts.create_if_missing = true;
-
+    static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter{
+        rocksdb::NewConcurrentTaskLimiter("compaction", FLAGS_num_compaction_threads)};
+    baseOpts.compaction_thread_limiter = compaction_thread_limiter;
     return s;
 }
 
@@ -175,6 +197,30 @@ bool loadOptionsMap(std::unordered_map<std::string, std::string> &map, const std
         map.emplace(key, val.asString());
     });
     return true;
+}
+
+static std::shared_ptr<rocksdb::Statistics> createDBStatistics() {
+    std::shared_ptr<rocksdb::Statistics> dbstats = rocksdb::CreateDBStatistics();
+    if (FLAGS_rocksdb_stats_level == "kExceptHistogramOrTimers") {
+        dbstats->set_stats_level(rocksdb::StatsLevel::kExceptHistogramOrTimers);
+    } else if (FLAGS_rocksdb_stats_level == "kExceptTimers") {
+        dbstats->set_stats_level(rocksdb::StatsLevel::kExceptTimers);
+    } else if (FLAGS_rocksdb_stats_level == "kExceptDetailedTimers") {
+        dbstats->set_stats_level(rocksdb::StatsLevel::kExceptDetailedTimers);
+    } else if (FLAGS_rocksdb_stats_level == "kExceptTimeForMutex") {
+        dbstats->set_stats_level(rocksdb::StatsLevel::kExceptTimeForMutex);
+    } else {
+        dbstats->set_stats_level(rocksdb::StatsLevel::kAll);
+    }
+    return dbstats;
+}
+
+std::shared_ptr<rocksdb::Statistics> getDBStatistics() {
+    if (FLAGS_enable_rocksdb_statistics) {
+        static std::shared_ptr<rocksdb::Statistics> dbstats = createDBStatistics();
+        return dbstats;
+    }
+    return nullptr;
 }
 
 }  // namespace kvstore

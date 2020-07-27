@@ -45,6 +45,8 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts);
 
 bool loadOptionsMap(std::unordered_map<std::string, std::string> &map, const std::string& gflags);
 
+std::shared_ptr<rocksdb::Statistics> getDBStatistics();
+
 }  // namespace kvstore
 }  // namespace nebula
 #endif  // KVSTORE_ROCKSENGINECONFIG_H_
