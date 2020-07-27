@@ -40,6 +40,8 @@ DECLARE_string(part_man_type);
 DECLARE_string(rocksdb_compression_per_level);
 DECLARE_string(rocksdb_compression);
 
+DECLARE_bool(enable_rocksdb_statistics);
+DECLARE_string(rocksdb_stats_level);
 
 namespace nebula {
 namespace kvstore {
