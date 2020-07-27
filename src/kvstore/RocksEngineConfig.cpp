@@ -67,7 +67,7 @@ DEFINE_string(rocksdb_stats_level, "kExceptHistogramOrTimers", "rocksdb statisti
 
 DEFINE_int32(num_compaction_threads, 16, "Number of total compaction threads");
 
-DEFINE_int32(rate_limit, 1024 * 1024 * 1024, "write limit in bytes per sec");
+DEFINE_int32(rate_limit, 512, "write limit in bytes per sec. The unit is MB");
 
 namespace nebula {
 namespace kvstore {
@@ -171,6 +171,16 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
             = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 8/*shard bits*/);
         bbtOpts.block_cache = blockCache;
     }
+    if (FLAGS_num_compaction_threads > 0) {
+        static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter{
+            rocksdb::NewConcurrentTaskLimiter("compaction", FLAGS_num_compaction_threads)};
+        baseOpts.compaction_thread_limiter = compaction_thread_limiter;
+    }
+    if (FLAGS_rate_limit > 0) {
+        static std::shared_ptr<rocksdb::RateLimiter> rate_limiter{
+            rocksdb::NewGenericRateLimiter(FLAGS_rate_limit * 1024 * 1024)};
+        baseOpts.rate_limiter = rate_limiter;
+    }
 
     bbtOpts.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
     if (FLAGS_enable_partitioned_index_filter) {
@@ -183,12 +193,6 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     }
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
     baseOpts.create_if_missing = true;
-    static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter{
-        rocksdb::NewConcurrentTaskLimiter("compaction", FLAGS_num_compaction_threads)};
-    baseOpts.compaction_thread_limiter = compaction_thread_limiter;
-    static std::shared_ptr<rocksdb::RateLimiter> rate_limiter{
-        rocksdb::NewGenericRateLimiter(FLAGS_rate_limit)};
-    baseOpts.rate_limiter = rate_limiter;
     return s;
 }
 
