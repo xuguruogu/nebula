@@ -14,6 +14,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/concurrent_task_limiter.h"
+#include "rocksdb/rate_limiter.h"
 #include "base/Configuration.h"
 
 // [WAL]
@@ -65,6 +66,8 @@ DEFINE_bool(enable_rocksdb_statistics, false, "Whether or not to enable rocksdb'
 DEFINE_string(rocksdb_stats_level, "kExceptHistogramOrTimers", "rocksdb statistics level");
 
 DEFINE_int32(num_compaction_threads, 16, "Number of IO threads");
+
+DEFINE_int32(rate_limit, 1024 * 1024 * 1024, "write limit in bytes per sec");
 
 namespace nebula {
 namespace kvstore {
@@ -183,6 +186,9 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
     static std::shared_ptr<rocksdb::ConcurrentTaskLimiter> compaction_thread_limiter{
         rocksdb::NewConcurrentTaskLimiter("compaction", FLAGS_num_compaction_threads)};
     baseOpts.compaction_thread_limiter = compaction_thread_limiter;
+    static std::shared_ptr<rocksdb::RateLimiter> rate_limiter{
+        rocksdb::NewGenericRateLimiter(FLAGS_rate_limit)};
+    baseOpts.rate_limiter = rate_limiter;
     return s;
 }
 
