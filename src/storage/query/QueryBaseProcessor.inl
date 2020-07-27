@@ -497,7 +497,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
     auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
     if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
         std::pair<VertexID, TagID> cacheKey = std::make_pair(vId, tagId);
-        auto result = vertexCache_->get(cacheKey, partId);
+        auto result = vertexCache_->get(cacheKey);
         if (result.ok()) {
             std::pair<TagVersion, folly::Optional<std::string>> v
                 = std::move(result).value();
@@ -508,7 +508,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
                         << vId << ", tagId "
                         << tagId << ", version "
                         << tagVersion << ", but mutli version check failed.";
-                vertexCache_->evict(cacheKey, partId);
+                vertexCache_->evict(cacheKey);
             } else if (!row.hasValue()) {
                 VLOG(3) << "Missed partId " << partId << ", vId " << vId << ", tagId " << tagId;
                 return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
@@ -581,8 +581,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
             //TODO: cache consistency
             vertexCache_->insert(
                 std::make_pair(vId, tagId),
-                std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str())),
-                partId
+                std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str()))
             );
             VLOG(3) << "Insert cache for vId " << vId
                     << ", tagId " << tagId;
@@ -594,8 +593,7 @@ kvstore::ResultCode QueryBaseProcessor<REQ, RESP>::collectVertexProps(
                 std::numeric_limits<int64_t>::max() - time::WallClock::fastNowInMicroSec());
             vertexCache_->insert(
                 std::make_pair(vId, tagId),
-                std::make_pair(tagVersion, folly::Optional<std::string>()),
-                partId
+                std::make_pair(tagVersion, folly::Optional<std::string>())
             );
         }
         VLOG(3) << "Missed partId " << partId

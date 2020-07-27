@@ -287,7 +287,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
         auto srcTagId = src_tag_schema.first;
         auto schema = this->schemaMan_->getTagSchema(spaceId_, srcTagId);
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
-            auto result = vertexCache_->get(std::make_pair(vId, srcTagId), partId);
+            auto result = vertexCache_->get(std::make_pair(vId, srcTagId));
             if (result.ok()) {
                 std::pair<TagVersion, folly::Optional<std::string>> v
                     = std::move(result).value();
@@ -330,8 +330,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
                 vertexCache_->insert(
                     std::make_pair(vId, srcTagId),
-                    std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str())),
-                    partId
+                    std::make_pair(tagVersion, folly::Optional<std::string>(iter->val().str()))
                 );
                 VLOG(3) << "Insert cache for vId " << vId << ", srcTagId " << srcTagId;
             }
@@ -341,8 +340,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                     std::numeric_limits<int64_t>::max() - time::WallClock::fastNowInMicroSec());
                 vertexCache_->insert(
                     std::make_pair(vId, srcTagId),
-                    std::make_pair(tagVersion, folly::Optional<std::string>()),
-                    partId
+                    std::make_pair(tagVersion, folly::Optional<std::string>())
                 );
             }
             VLOG(3) << "Missed partId " << partId

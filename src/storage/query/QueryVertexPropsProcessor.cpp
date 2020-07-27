@@ -159,8 +159,7 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
             vertexCache_->insert(
                 std::make_pair(vId, tagId),
-                std::make_pair(tagVersion, folly::Optional<std::string>(valStr)),
-                partId
+                std::make_pair(tagVersion, folly::Optional<std::string>(valStr))
             );
             VLOG(3) << "Insert cache for vId " << vId << ", tagId " << tagId;
         }
