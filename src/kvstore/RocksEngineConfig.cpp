@@ -65,9 +65,11 @@ DEFINE_string(rocksdb_compression_per_level, "", "Specify per level compression 
 DEFINE_bool(enable_rocksdb_statistics, false, "Whether or not to enable rocksdb's statistics");
 DEFINE_string(rocksdb_stats_level, "kExceptHistogramOrTimers", "rocksdb statistics level");
 
-DEFINE_int32(num_compaction_threads, 16, "Number of total compaction threads");
+DEFINE_int32(num_compaction_threads, 0,
+            "Number of total compaction threads. 0 means unlimited.");
 
-DEFINE_int32(rate_limit, 512, "write limit in bytes per sec. The unit is MB");
+DEFINE_int32(rate_limit, 0,
+            "write limit in bytes per sec. The unit is MB. 0 means unlimited.");
 
 namespace nebula {
 namespace kvstore {
