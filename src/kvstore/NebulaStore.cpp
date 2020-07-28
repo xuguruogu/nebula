@@ -590,22 +590,33 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
                 "%s/download/%s/%d",
                 value(ret)->getDataRoot(), subdir.c_str(), part);
             if (!fs::FileUtils::exist(path)) {
-                LOG(INFO) << "ingest ignore: " << path << " not existed.";
+                LOG(INFO) << "Ingest ignore: "
+                          << "part[" << part << "], "
+                          << "not exist dir[" << path << "]";
                 continue;
             }
 
             auto files = nebula::fs::FileUtils::listAllFilesInDir(path.c_str(), true, "*.sst");
             if (files.empty()) {
-                LOG(INFO) << "ingest ignore: " << path << " empty dir.";
+                LOG(INFO) << "Ingest ignore: "
+                          << "part[" << part << "], "
+                          << "empty dir[" << path << "]";
                 continue;
             }
 
             auto code = engine->ingest(files);
             if (code != ResultCode::SUCCEEDED) {
-                LOG(ERROR) << "ingest failed [" << code << "]: " << folly::join(",", files);
+                LOG(ERROR) << "Ingest failed: "
+                           << "part[" << part << "], "
+                           << "code[" << code << "], "
+                           << "dir[" << path << "], "
+                           << "files[" << folly::join(",", files) << "]";
                 return code;
             } else {
-                LOG(INFO) << "ingest success: " << folly::join(",", files);
+                LOG(INFO) << "Ingest success: "
+                          << "part[" << part << "], "
+                          << "dir[" << path << "], "
+                          << "files[" << folly::join(",", files) << "]";
             }
         }
     }
