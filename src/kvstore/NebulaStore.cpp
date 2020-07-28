@@ -578,10 +578,7 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
     }
     auto space = nebula::value(spaceRet);
 
-    std::vector<std::vector<std::string>> extraFiles;
-    unsigned cnt = 0;
     for (auto& engine : space->engines_) {
-        std::vector<std::string> engineExtraFiles;
         auto parts = engine->allParts();
         for (auto part : parts) {
             auto ret = this->engine(spaceId, part);
@@ -593,28 +590,16 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
                 "%s/download/%s/%d",
                 value(ret)->getDataRoot(), subdir.c_str(), part);
             if (!fs::FileUtils::exist(path)) {
-                LOG(WARNING) << path << " not existed";
-                continue;
-            }
-            auto files = nebula::fs::FileUtils::listAllFilesInDir(path.c_str(), true, "*.sst");
-            engineExtraFiles.insert(engineExtraFiles.begin(), files.begin(), files.end());
-            cnt += files.size();
-        }
-        extraFiles.emplace_back(std::move(engineExtraFiles));
-    }
-
-    if (cnt == 0) {
-        LOG(WARNING) << "Ingesting extra file cnt 0. spaceId " << spaceId << ", subdir: " << subdir;
-    }
-
-    for (unsigned i = 0; i < space->engines_.size(); i++) {
-        auto engineExtraFiles = std::move(extraFiles[i]);
-        KVEngine* engine = space->engines_[i].get();
-        if (!engineExtraFiles.empty()) {
-            LOG(INFO) << "Ingesting extra file:\n" << folly::join("\n", engineExtraFiles);
-            auto code = engine->ingest(std::move(engineExtraFiles));
-            if (code != ResultCode::SUCCEEDED) {
-                return code;
+                LOG(INFO) << "ingest ignore: " << path << " not existed";
+            } else {
+                auto files = nebula::fs::FileUtils::listAllFilesInDir(path.c_str(), true, "*.sst");
+                auto code = engine->ingest(files);
+                if (code != ResultCode::SUCCEEDED) {
+                    LOG(ERROR) << "ingest failed [" << code << "]: " << folly::join(",", files);
+                    return code;
+                } else {
+                    LOG(INFO) << "ingest success: " << folly::join(",", files);
+                }
             }
         }
     }

@@ -155,7 +155,7 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
     }
     std::vector<std::string> files;
     folly::split("\n", result.value(), files, true);
-    int32_t  partNumber = files.size() - 1;
+    int32_t  partNumber = files.size();
 
     std::unique_ptr<kvstore::KVIterator> iter;
     auto prefix = MetaServiceUtils::partPrefix(spaceID_);
