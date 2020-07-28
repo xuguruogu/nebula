@@ -153,9 +153,10 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
         LOG(ERROR) << "Dispatch SSTFile Failed. " << result.status();
         return false;
     }
+    std::string lsContent = result.value();
     std::vector<std::string> files;
-    folly::split("\n", result.value(), files, true);
-    int32_t  partNumber = files.size();
+    folly::split("\n", lsContent, files, true);
+    int32_t  partNumber = files.empty() ? 0 : files.size() - 1;
 
     std::unique_ptr<kvstore::KVIterator> iter;
     auto prefix = MetaServiceUtils::partPrefix(spaceID_);
@@ -186,7 +187,8 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
 
     if (partNumber == 0 || partNumber > partSize) {
         LOG(ERROR) << "HDFS part number not valid parts in hdfs: "
-                   << partNumber << ", parts: " << partSize;
+                   << partNumber << ", parts: " << partSize
+                   << "\n" << lsContent;
         return false;
     }
 
