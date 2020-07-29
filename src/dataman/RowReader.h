@@ -296,7 +296,7 @@ public:
         return operator!=(nullptr);
     }
 
-    bool operator==(nullptr_t) const noexcept {
+    bool operator==(std::nullptr_t) const noexcept {
         return !data_.data();
     }
 
@@ -304,7 +304,7 @@ public:
         return data_ == x.data_;
     }
 
-    bool operator!=(nullptr_t) const noexcept {
+    bool operator!=(std::nullptr_t) const noexcept {
         return static_cast<bool>(data_.data());
     }
 
