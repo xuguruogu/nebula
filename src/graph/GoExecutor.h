@@ -175,7 +175,7 @@ private:
      */
     class VertexHolder final {
     public:
-        VertexHolder(ExecutionContext* ectx) : ectx_(ectx) { }
+        explicit VertexHolder(ExecutionContext* ectx) : ectx_(ectx) { }
         OptVariantType getDefaultProp(TagID tid, const std::string &prop) const;
         OptVariantType get(VertexID id, TagID tid, const std::string &prop) const;
         void add(const storage::cpp2::QueryResponse &resp);

@@ -278,7 +278,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
 
     // tag props
     std::vector<std::string> srcTagContents;
-    std::unordered_map<TagID, std::unique_ptr<RowReader>> srcTagReaderMap;
+    std::unordered_map<TagID, RowReader> srcTagReaderMap;
     std::unordered_map<std::string, nebula::graph::cpp2::ColumnValue> yieldVariableMap;
     std::priority_queue<Node> resultNodeHeap;
 
@@ -303,7 +303,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                     if (srcTagReader == nullptr) {
                         return kvstore::ResultCode::ERR_CORRUPT_DATA;
                     }
-                    srcTagReaderMap[srcTagId] = std::move(srcTagReader);
+                    srcTagReaderMap.emplace(srcTagId, std::move(srcTagReader));
                     VLOG(3) << "Hit cache for vId " << vId << ", srcTagId " << srcTagId;
                 }
                 continue;
@@ -326,7 +326,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             if (srcTagReader == nullptr) {
                 return kvstore::ResultCode::ERR_CORRUPT_DATA;
             }
-            srcTagReaderMap[srcTagId] = std::move(srcTagReader);
+            srcTagReaderMap.emplace(srcTagId, std::move(srcTagReader));
             if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
                 vertexCache_->insert(
                     std::make_pair(vId, srcTagId),
