@@ -206,8 +206,10 @@ TEST(ScanVertexTest, RetrieveAllPropertyTest) {
     mockData(kv.get());
     PartitionID partId = 1;
     auto req = buildRequest(partId, "", 10, true);
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
-    auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+    auto* processor = ScanVertexProcessor::instance(
+        kv.get(), schemaMan.get(), nullptr, executor.get());
     auto f = processor->getFuture();
     processor->process(req);
     auto resp = std::move(f).get();
@@ -230,8 +232,10 @@ TEST(ScanVertexTest, RetrieveSomePropertyTest) {
     mockData(kv.get());
     PartitionID partId = 1;
     auto req = buildRequest(partId, "", 10);
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
-    auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+    auto* processor = ScanVertexProcessor::instance(
+        kv.get(), schemaMan.get(), nullptr, executor.get());
     auto f = processor->getFuture();
     processor->process(req);
     auto resp = std::move(f).get();
@@ -254,8 +258,10 @@ TEST(ScanVertexTest, RetrieveNonePropertyTest) {
     mockData(kv.get());
     PartitionID partId = 1;
     auto req = buildRequest(partId, "", 10, false, true);
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
-    auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+    auto* processor = ScanVertexProcessor::instance(
+        kv.get(), schemaMan.get(), nullptr, executor.get());
     auto f = processor->getFuture();
     processor->process(req);
     auto resp = std::move(f).get();
@@ -285,9 +291,11 @@ TEST(ScanVertexTest, RetrieveConsecutiveBlockTest1) {
         tagIds.emplace(tagId);
     }
     auto req = buildRequest(partId, "", rowLimit, true, false, tagIds);
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
     while (true) {
-        auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+        auto* processor = ScanVertexProcessor::instance(
+            kv.get(), schemaMan.get(), nullptr, executor.get());
         auto f = processor->getFuture();
         processor->process(req);
         auto resp = std::move(f).get();
@@ -322,9 +330,11 @@ TEST(ScanVertexTest, RetrieveConsecutiveBlockTest2) {
     }
     auto req = buildRequest(partId, "", rowLimit, false, false, tagIds);
     int32_t batchCount = 0;
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
     while (true) {
-        auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+        auto* processor = ScanVertexProcessor::instance(
+            kv.get(), schemaMan.get(), nullptr, executor.get());
         auto f = processor->getFuture();
         processor->process(req);
         auto resp = std::move(f).get();
@@ -362,9 +372,11 @@ TEST(ScanVertexTest, RetrieveConsecutiveBlockTest3) {
     }
     auto req = buildRequest(partId, "", rowLimit, false, true, tagIds);
     int32_t batchCount = 0;
+    auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
     while (true) {
-        auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+        auto* processor = ScanVertexProcessor::instance(
+            kv.get(), schemaMan.get(), nullptr, executor.get());
         auto f = processor->getFuture();
         processor->process(req);
         auto resp = std::move(f).get();
@@ -400,9 +412,11 @@ TEST(ScanVertexTest, RetrieveManyPartsTest) {
         int32_t rowCount = 0, rowLimit = 10, expectRowCount = 10;
         auto req = buildRequest(partId, "", rowLimit, false, false, tagIds);
         int32_t batchCount = 0;
+        auto executor = std::make_unique<folly::CPUThreadPoolExecutor>(3);
 
         while (true) {
-            auto* processor = ScanVertexProcessor::instance(kv.get(), schemaMan.get(), nullptr);
+            auto* processor = ScanVertexProcessor::instance(
+                kv.get(), schemaMan.get(), nullptr, executor.get());
             auto f = processor->getFuture();
             processor->process(req);
             auto resp = std::move(f).get();

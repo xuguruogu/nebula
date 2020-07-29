@@ -155,7 +155,8 @@ StorageServiceHandler::future_scanEdge(const cpp2::ScanEdgeRequest& req) {
 
 folly::Future<cpp2::ScanVertexResponse>
 StorageServiceHandler::future_scanVertex(const cpp2::ScanVertexRequest& req) {
-    auto* processor = ScanVertexProcessor::instance(kvstore_, schemaMan_, &scanVertexQpsStat_);
+    auto* processor = ScanVertexProcessor::instance(
+        kvstore_, schemaMan_, &scanVertexQpsStat_, readerPool_.get());
     RETURN_FUTURE(processor);
 }
 

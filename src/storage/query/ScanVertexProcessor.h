@@ -18,8 +18,9 @@ class ScanVertexProcessor
 public:
     static ScanVertexProcessor* instance(kvstore::KVStore* kvstore,
                                          meta::SchemaManager* schemaMan,
-                                         stats::Stats* stats) {
-        return new ScanVertexProcessor(kvstore, schemaMan, stats);
+                                         stats::Stats* stats,
+                                         folly::Executor* executor = nullptr) {
+        return new ScanVertexProcessor(kvstore, schemaMan, stats, executor);
     }
 
     void process(const cpp2::ScanVertexRequest& req);
@@ -27,8 +28,10 @@ public:
 private:
     explicit ScanVertexProcessor(kvstore::KVStore* kvstore,
                                  meta::SchemaManager* schemaMan,
-                                 stats::Stats* stats)
-            : BaseProcessor<cpp2::ScanVertexResponse>(kvstore, schemaMan, stats) {}
+                                 stats::Stats* stats,
+                                 folly::Executor* executor = nullptr)
+        : BaseProcessor<cpp2::ScanVertexResponse>(kvstore, schemaMan, stats)
+        , executor_(executor) {}
 
     cpp2::ErrorCode checkAndBuildContexts(const cpp2::ScanVertexRequest& req);
 
@@ -37,6 +40,13 @@ private:
     bool returnAllColumns_{false};
     GraphSpaceID spaceId_;
     PartitionID partId_;
+    int64_t rowLimit_{0};
+    int64_t startTime_{0};
+    int64_t endTime_{0};
+    std::string start_;
+    std::string prefix_;
+
+    folly::Executor* executor_{nullptr};
 };
 
 }  // namespace storage
