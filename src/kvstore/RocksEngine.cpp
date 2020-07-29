@@ -102,12 +102,19 @@ RocksEngine::RocksEngine(GraphSpaceID spaceId,
         options.compaction_filter_factory = cfFactory;
     }
     status = rocksdb::DB::Open(options, path, &db);
-    if (FLAGS_enable_auto_repair && !status.ok()) {
-        LOG(ERROR) << "try repair db. [" << status.ToString() << "] -> ["
-                   << rocksdb::RepairDB(path, options).ToString() << "]";
-        status = rocksdb::DB::Open(options, path, &db);
+    if (status.IsNoSpace()) {
+        LOG(WARNING) << status.ToString();
+    } else if (status.IsCorruption() || status.IsIncomplete() || status.IsTryAgain()) {
+        if (FLAGS_enable_auto_repair && !status.ok()) {
+            LOG(ERROR) << "try repair db. [" << status.ToString() << "] -> ["
+                       << rocksdb::RepairDB(path, options).ToString() << "]";
+            status = rocksdb::DB::Open(options, path, &db);
+        }
+        CHECK(status.ok()) << status.ToString();
+    } else {
+        CHECK(status.ok()) << status.ToString();
     }
-    CHECK(status.ok()) << status.ToString();
+
     db_.reset(db);
     partsNum_ = allParts().size();
     LOG(INFO) << "open rocksdb on " << path;
