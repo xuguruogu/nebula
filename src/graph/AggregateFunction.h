@@ -498,7 +498,7 @@ public:
         return result;
     }
 private:
-    Cord            cord_;
+    ICord<>         cord_;
     bool            has_{false};
     uint8_t         type_ = 0;
 };
@@ -594,7 +594,7 @@ private:
     std::set<bool>                  bool_values_;
     std::set<double>                double_values_;
 //    std::set<std::string>           str_values_;
-    Cord                            cord_;
+    ICord<>                         cord_;
     bool                            has_{false};
     uint8_t                         type_ = 0;
 };

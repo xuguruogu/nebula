@@ -9,6 +9,7 @@
 
 #include "base/Base.h"
 #include "base/ConcurrentLRUCache.h"
+#include "base/CuckooHashCache.h"
 #include "filter/Expressions.h"
 #include "dataman/RowReader.h"
 
@@ -17,7 +18,12 @@ namespace storage {
 
 using TagProp = std::pair<std::string, std::string>;
 
-using VertexCache = ConcurrentLRUCache<
+//using VertexCache = ConcurrentLRUCache<
+//    std::pair<VertexID, TagID>,
+//    std::pair<TagVersion, folly::Optional<std::string>>
+//>;
+
+using VertexCache = CuckoohashCache<
     std::pair<VertexID, TagID>,
     std::pair<TagVersion, folly::Optional<std::string>>
 >;
