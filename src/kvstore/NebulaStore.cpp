@@ -574,6 +574,7 @@ ResultCode NebulaStore::ingestEdge(GraphSpaceID spaceId, EdgeType edgeType) {
 ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) {
     auto spaceRet = space(spaceId);
     if (!ok(spaceRet)) {
+        LOG(INFO) << "Space not found: " << spaceId;
         return error(spaceRet);
     }
     auto space = nebula::value(spaceRet);
@@ -581,14 +582,9 @@ ResultCode NebulaStore::ingest(GraphSpaceID spaceId, const std::string& subdir) 
     for (auto& engine : space->engines_) {
         auto parts = engine->allParts();
         for (auto part : parts) {
-            auto ret = this->engine(spaceId, part);
-            if (!ok(ret)) {
-                return error(ret);
-            }
-
             auto path = folly::stringPrintf(
                 "%s/download/%s/%d",
-                value(ret)->getDataRoot(), subdir.c_str(), part);
+                engine->getDataRoot(), subdir.c_str(), part);
             if (!fs::FileUtils::exist(path)) {
                 LOG(INFO) << "Ingest ignore: "
                           << "part[" << part << "], "
