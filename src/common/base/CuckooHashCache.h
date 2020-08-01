@@ -216,7 +216,7 @@ public:
     explicit CuckoohashCache(size_t n = DEFAULT_SIZE, size_t ttl = DEFAULT_TTL_SECONDS)
         : buckets_(reserve_calc(n)),
           locks_(std::min(bucket_count(), size_t(kMaxNumLocks)), spinlock()),
-          ttl_(ttl == 0 ? DEFAULT_TTL_SECONDS : ttl) {}
+          ttl_(ttl) {}
 
     CuckoohashCache(const CuckoohashCache &other) = delete;
     CuckoohashCache &operator=(const CuckoohashCache &other) = delete;
@@ -740,7 +740,7 @@ private:
     bool try_reclaim(const size_t bucket_ind, const size_t slot) {
         bucket &b = buckets_[bucket_ind];
         if (b.occupied(slot) &&
-            b.expire(slot) < nebula::time::WallClock::fastNowInSec()) {
+            b.expire(slot) <= nebula::time::WallClock::fastNowInSec()) {
             del_from_bucket(bucket_ind, slot);
             return true;
         }
