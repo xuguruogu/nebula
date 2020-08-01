@@ -99,7 +99,7 @@ Status ScanExecutor::prepare() {
             }
             limit_ = limit;
         } else {
-            limit_ = 2000;
+            limit_ = std::numeric_limits<int32_t>::max();
         }
     }
 
