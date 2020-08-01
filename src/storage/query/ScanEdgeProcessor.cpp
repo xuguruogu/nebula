@@ -52,8 +52,7 @@ void ScanEdgeProcessor::process(const cpp2::ScanEdgeRequest& req) {
     int64_t startTime = req.get_start_time(), endTime = req.get_end_time();
     int32_t blockSize = 0;
 
-    for (; iter->valid() && rowCount < rowLimit && blockSize < FLAGS_max_scan_block_size;
-         iter->next()) {
+    for (; iter->valid() && rowCount < rowLimit; iter->next()) {
         auto key = iter->key();
         if (!NebulaKeyUtils::isEdge(key)) {
             continue;
