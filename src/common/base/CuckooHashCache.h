@@ -74,9 +74,6 @@ public:
         const key_type &key(size_t ind) const {
             return storage_kvpair(ind).first;
         }
-        key_type &&movable_key(size_t ind) {
-            return std::move(storage_kvpair(ind).first);
-        }
 
         const mapped_type &mapped(size_t ind) const {
             return storage_kvpair(ind).second;
