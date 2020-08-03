@@ -215,6 +215,24 @@ TEST_F(SampleTest, fetchInputProp) {
     }
 }
 
+TEST_F(SampleTest, sampleReversely) {
+    {
+        cpp2::ExecutionResponse resp;
+        auto &player = players_["Tony Parker"];
+        auto *fmt = "SAMPLE FROM %ld OVER like REVERSELY YIELD like._dst Order by rand32() limit 10";
+        auto query = folly::stringPrintf(fmt, player.vid());
+        auto code = client_->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+        std::vector<std::tuple<VertexID>> expected = {
+            {players_["Tim Duncan"].vid()},
+            {players_["LaMarcus Aldridge"].vid()},
+            {players_["Marco Belinelli"].vid()},
+            {players_["Boris Diaw"].vid()},
+            {players_["Dejounte Murray"].vid()},
+        };
+        ASSERT_TRUE(verifyResult(resp, expected));
+    }
+}
 
 } //graph
 } //nebula

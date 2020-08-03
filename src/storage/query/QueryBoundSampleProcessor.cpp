@@ -388,7 +388,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             }
 
             // edge reader
-            auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, edgeType);
+            auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, std::abs(edgeType));
             if (edgeReader == nullptr) {
                 return kvstore::ResultCode::ERR_CORRUPT_DATA;
             }
