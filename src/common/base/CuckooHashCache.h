@@ -109,23 +109,12 @@ public:
         std::array<bool, SLOT_PER_BUCKET> occupied_;
     };
 
-    bucket_container(size_t hp) :
-          hashpower_(hp),
-          buckets_(size()) { }
-
+    bucket_container(size_t hp) : hashpower_(hp), buckets_(size()) { }
+    bucket_container(const bucket_container &bc) noexcept = delete;
+    bucket_container &operator=(const bucket_container &bc) = delete;
+    bucket_container(bucket_container &&bc) noexcept = default;
+    bucket_container &operator=(bucket_container &&bc) noexcept = default;
     ~bucket_container() noexcept { clear(); }
-
-    bucket_container(bucket_container &&bc) noexcept :
-          hashpower_(bc.hashpower()),
-          buckets_(std::move(bc.buckets_)) { }
-
-    bucket_container &operator=(bucket_container &&bc) noexcept {
-        if (this != &bc) {
-            this->~bucket_container();
-            new (this) bucket_container(std::move(bc));
-        }
-        return *this;
-    }
 
     size_t hashpower() const { return hashpower_; }
 
@@ -661,13 +650,11 @@ private:
     // the bucket indices associated with the hash value and the current
     // hashpower.
     TwoBuckets snapshot_and_lock_two(const hash_value &hv) const {
-        while (true) {
-            // Keep the current hashpower and locks we're using to compute the buckets
-            const size_t hp = hashpower();
-            const size_t i1 = index_hash(hp, hv.hash);
-            const size_t i2 = alt_index(hp, hv.partial, i1);
-            return lock_two(i1, i2);
-        }
+        // Keep the current hashpower and locks we're using to compute the buckets
+        const size_t hp = hashpower();
+        const size_t i1 = index_hash(hp, hv.hash);
+        const size_t i2 = alt_index(hp, hv.partial, i1);
+        return lock_two(i1, i2);
     }
 
     // lock_ind converts an index into buckets to an index into locks.
@@ -675,13 +662,10 @@ private:
         return bucket_ind & (kMaxNumLocks - 1);
     }
 
-    // Data storage types and functions
-
     // The type of the bucket
     using bucket = typename buckets_t::bucket;
 
     // Status codes for internal functions
-
     enum cuckoo_status {
         ok,
         failure,
