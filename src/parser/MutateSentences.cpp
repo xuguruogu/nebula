@@ -299,19 +299,17 @@ EdgeKeys* DeleteEdgesSentence::keys() const {
 std::string DownloadSentence::toString() const {
     std::string buf;
     buf.reserve(256);
-    buf += "DOWNLOAD ";
+    buf += "DOWNLOAD";
     if (tag()) {
-        buf += "tag ";
+        buf += " tag ";
         buf += *tag();
-        buf += " ";
     }
     if (edge()) {
-        buf += "edge ";
+        buf += " edge ";
         buf += *edge();
-        buf += " ";
     }
     buf += folly::stringPrintf(
-        "HDFS \"%s:%d/%s\"",
+        " HDFS \"%s:%d/%s\"",
         host_.get()->c_str(), port_, path_.get()->c_str());
 
     return buf;
@@ -320,16 +318,14 @@ std::string DownloadSentence::toString() const {
 std::string IngestSentence::toString() const {
     std::string buf;
     buf.reserve(256);
-    buf += "INGEST ";
+    buf += "INGEST";
     if (tag()) {
-        buf += "tag ";
+        buf += " tag ";
         buf += *tag();
-        buf += " ";
     }
     if (edge()) {
-        buf += "edge ";
+        buf += " edge ";
         buf += *edge();
-        buf += " ";
     }
     return buf;
 }
