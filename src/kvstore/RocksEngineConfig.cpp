@@ -171,7 +171,7 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
         bbtOpts.no_block_cache = true;
     } else {
         static std::shared_ptr<rocksdb::Cache> blockCache
-            = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 12/*shard bits*/);
+            = rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache * 1024 * 1024, 8/*shard bits*/);
         bbtOpts.block_cache = blockCache;
     }
     if (FLAGS_num_compaction_threads > 0) {
