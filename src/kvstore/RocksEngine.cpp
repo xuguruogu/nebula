@@ -192,7 +192,6 @@ ResultCode RocksEngine::range(const std::string& start,
                               const std::string& end,
                               std::unique_ptr<KVIterator>* storageIter) {
     rocksdb::ReadOptions options;
-    options.total_order_seek = true;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(start));
@@ -205,7 +204,6 @@ ResultCode RocksEngine::range(const std::string& start,
 ResultCode RocksEngine::prefix(const std::string& prefix,
                                std::unique_ptr<KVIterator>* storageIter) {
     rocksdb::ReadOptions options;
-    options.total_order_seek = true;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(prefix));
@@ -219,7 +217,6 @@ ResultCode RocksEngine::rangeWithPrefix(const std::string& start,
                                         const std::string& prefix,
                                         std::unique_ptr<KVIterator>* storageIter) {
     rocksdb::ReadOptions options;
-    options.total_order_seek = true;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(start));
