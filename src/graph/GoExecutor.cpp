@@ -1385,15 +1385,12 @@ void GoExecutor::VertexHolder::add(
             vertexSchema->cend(),
             std::inserter(
                 tagSchemaMap_,
-                tagSchemaMap_.begin()
-            ),
+                tagSchemaMap_.begin()),
             [] (auto &s) {
                 return std::make_pair(
                     s.first,
-                    std::make_shared<ResultSchemaProvider>(s.second)
-                );
-            }
-        );
+                    std::make_shared<ResultSchemaProvider>(s.second));
+            });
 
         for (auto &vdata : *vertices) {
             auto vid = vdata.get_vertex_id();
