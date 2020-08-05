@@ -43,7 +43,7 @@ void StorageHttpDownloadHandler::init(nebula::hdfs::HdfsHelper *helper,
     CHECK(!paths_.empty());
 }
 
-static void _clean_subdirs(const std::string &root) {
+static void cleanSubdirs(const std::string &root) {
     if (fs::FileUtils::exist(root)) {
         auto dirs = fs::FileUtils::listAllDirsInDir(root.c_str(), true);
         for (auto& dir : dirs) {
@@ -115,9 +115,9 @@ void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers)
         std::string downloadRootPathTag = downloadRootPath + "/tag";
         std::string downloadRootPathGeneral = downloadRootPath + "/general";
 
-        _clean_subdirs(downloadRootPathEdge);
-        _clean_subdirs(downloadRootPathTag);
-        _clean_subdirs(downloadRootPathGeneral);
+        cleanSubdirs(downloadRootPathEdge);
+        cleanSubdirs(downloadRootPathTag);
+        cleanSubdirs(downloadRootPathGeneral);
 
         std::string downloadPath;
         if (edge_.has_value()) {

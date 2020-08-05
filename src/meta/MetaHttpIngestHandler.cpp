@@ -49,14 +49,20 @@ void MetaHttpIngestHandler::onRequest(std::unique_ptr<HTTPMessage> headers) noex
 
     spaceID_ = headers->getIntQueryParam("space");
 
-    if (headers->hasQueryParam("tag")) {
-        auto& tag = headers->getQueryParam("tag");
-        tag_.assign(folly::to<TagID>(tag));
-    }
+    try {
+        if (headers->hasQueryParam("tag")) {
+            auto& tag = headers->getQueryParam("tag");
+            tag_.assign(folly::to<TagID>(tag));
+        }
 
-    if (headers->hasQueryParam("edge")) {
-        auto& edge = headers->getQueryParam("edge");
-        edge_.assign(folly::to<EdgeType>(edge));
+        if (headers->hasQueryParam("edge")) {
+            auto& edge = headers->getQueryParam("edge");
+            edge_.assign(folly::to<EdgeType>(edge));
+        }
+    } catch (std::exception& e) {
+        LOG(ERROR) << "Parse tag/edge error. " << e.what();
+        err_ = HttpCode::E_ILLEGAL_ARGUMENT;
+        return;
     }
 }
 

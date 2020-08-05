@@ -142,9 +142,6 @@ pid_t ProcessUtils::maxPid() {
 
 
 StatusOr<std::string> ProcessUtils::runCommand(const char* command) {
-    std::string cmd;
-    cmd += command;
-    cmd += " 2>&1";
     FILE* f = popen(command, "re");
     if (f == nullptr) {
         return Status::Error("Failed to execute the command [%s]", command);
