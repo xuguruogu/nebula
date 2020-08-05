@@ -16,7 +16,7 @@ DEFINE_uint32(max_appendlog_batch_size, 128,
               "The max number of logs in each appendLog request batch");
 DEFINE_uint32(max_outstanding_requests, 1024,
               "The max number of outstanding appendLog requests");
-DEFINE_int32(raft_rpc_timeout_ms, 500, "rpc timeout for raft client");
+DEFINE_int32(raft_rpc_timeout_ms, 5000, "rpc timeout for raft client");
 
 DECLARE_bool(trace_raft);
 DECLARE_uint32(raft_heartbeat_interval_secs);
