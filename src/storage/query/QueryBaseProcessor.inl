@@ -757,8 +757,7 @@ QueryBaseProcessor<REQ, RESP>::asyncProcessBucket(
             codes.emplace_back(
                 pv.first,
                 pv.second,
-                processVertex(bucketIdx, pv.first, pv.second)
-            );
+                processVertex(bucketIdx, pv.first, pv.second));
         }
         p.setValue(std::move(codes));
     });

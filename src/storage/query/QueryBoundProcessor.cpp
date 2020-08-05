@@ -246,8 +246,7 @@ void QueryBoundProcessor::onProcessFinished(int32_t retNum) {
         vertices.insert(
             vertices.end(),
             std::make_move_iterator(bucket.begin()),
-            std::make_move_iterator(bucket.end())
-        );
+            std::make_move_iterator(bucket.end()));
     }
 
     resp_.set_vertices(std::move(vertices));
