@@ -1,4 +1,5 @@
-#pragma once
+#ifndef COMMON_BASE_CUCKOOHASHCACHE_H_
+#define COMMON_BASE_CUCKOOHASHCACHE_H_
 
 #include <algorithm>
 #include <array>
@@ -854,3 +855,5 @@ private:
 };
 
 }
+
+#endif  // COMMON_BASE_CUCKOOHASHCACHE_H_
