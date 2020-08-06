@@ -35,6 +35,14 @@ public:
         bool isValid() const override {
             return true;
         }
+
+        bool hasDefaultValue() const override {
+            return hasDefaultValue_;
+        }
+
+        std::string getDefaultValue() const {
+            return defaultValue_;
+        }
     private:
         std::string name_;
         ValueType type_;
