@@ -113,7 +113,6 @@ void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& r
 
 cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighborsSampleRequest& req) {
     expCtx_ = std::make_unique<ExpressionContext>();
-
     // yields
     {
         yields_ = req.get_yields();
@@ -139,9 +138,12 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
     }
 
     // order by
-
-    const auto& orderBy = req.get_sample_filter().get_order_by();
-    if (!orderBy.empty()) {
+    {
+        const auto& orderBy = req.get_sample_filter().get_order_by();
+        if (orderBy.empty()) {
+            VLOG(1) << "check order by fail";
+            return cpp2::ErrorCode::E_INVALID_FILTER;
+        }
         StatusOr<std::unique_ptr<Expression>> expRet = Expression::decode(orderBy);
         if (!expRet.ok()) {
             return cpp2::ErrorCode::E_INVALID_FILTER;
@@ -149,15 +151,26 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
 
         orderBy_ = std::move(expRet).value();
         orderBy_->setContext(expCtx_.get());
+        Status status = orderBy_->prepare();
+        if (!status.ok()) {
+            return cpp2::ErrorCode::E_INVALID_FILTER;
+        }
     }
 
     // limit
-    limitSize_ = req.get_sample_filter().get_limit_size();
+    {
+        limitSize_ = req.get_sample_filter().get_limit_size();
+        if (limitSize_ <= 0) {
+            VLOG(1) << "limit should not <= 0";
+            return cpp2::ErrorCode::E_INVALID_FILTER;
+        }
+    }
 
     // check dst.
     if (expCtx_->hasDstTagProp()) {
         return cpp2::ErrorCode::E_INVALID_DST_PROP;
     }
+
     // schema
     input_schema_ = std::make_unique<ResultSchemaProvider>(req.schema);
 
@@ -198,6 +211,18 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
 
     // vidIndex
     vidIndex_ = req.get_vid_index();
+
+    for (auto& expr : yields_expr_) {
+        if (!checkExp(expr.get())) {
+            VLOG(3) << "check yeild fail";
+            return cpp2::ErrorCode::E_INVALID_YIELD;
+        }
+    }
+
+    if (!checkExp(orderBy_.get())) {
+        VLOG(1) << "check order by fail";
+        return cpp2::ErrorCode::E_INVALID_FILTER;
+    }
 
     return cpp2::ErrorCode::SUCCEEDED;
 }
@@ -280,7 +305,8 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
     std::vector<std::string> srcTagContents;
     std::unordered_map<TagID, RowReader> srcTagReaderMap;
     std::unordered_map<std::string, nebula::graph::cpp2::ColumnValue> yieldVariableMap;
-    std::priority_queue<Node> resultNodeHeap;
+    std::vector<Node> resultNodeHeap;
+    resultNodeHeap.reserve(limitSize_);
 
     // TODO: add multiple version check
     for (auto& src_tag_schema : src_tag_schema_) {
@@ -349,7 +375,6 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             return kvstore::ResultCode::ERR_KEY_NOT_FOUND;
         }
     }
-
 
     // TODO: add multiple version check
     // edge props
@@ -435,7 +460,7 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
 
                 if (yieldVariableMap.find(prop) != yieldVariableMap.end()) {
                     auto& col = yieldVariableMap[prop];
-                    return toVariantType(col);;
+                    return toVariantType(col);
                 }
                 return Status::Error("Input Prop `%s' not found.", prop.c_str());
             };
@@ -497,12 +522,8 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             nebula::graph::cpp2::RowValue row;
             std::vector<nebula::graph::cpp2::ColumnValue> resultRow;
             resultRow.reserve(yields_.size());
-            for (uint32_t index=0 ; index < yields_expr_.size(); index ++) {
+            for (unsigned index = 0 ; index < yields_expr_.size(); index ++) {
                 auto& expr = yields_expr_[index];
-                if (!checkExp(expr.get())) {
-                    VLOG(3) << "check yeild fail";
-                    return kvstore::ResultCode::ERR_EXPR_FAILED;
-                }
                 auto exprStatus = expr->eval(getters);
                 if (!exprStatus.ok()) {
                     VLOG(3) << "check yeild fail";
@@ -510,62 +531,44 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                 }
                 auto col = toColumnValue(std::move(exprStatus).value());
                 yieldVariableMap[yields_[index].get_alias()] = col;
-
                 resultRow.push_back(std::move(col));
             }
             row.set_columns(std::move(resultRow));
 
+            auto value  = orderBy_->eval(getters);
+            if (!value.ok()) {
+                // may be out of limitation of double
+                VLOG(3) << "get the orderby value fail";
+                return kvstore::ResultCode::ERR_EXPR_FAILED;
+            }
+            auto r = std::move(value).value();
 
-            if (orderBy_) {
-                if (!checkExp(orderBy_.get())) {
-                    VLOG(3) << "check order by fail";
-                    return kvstore::ResultCode::ERR_EXPR_FAILED;
-                }
-                auto value  = orderBy_->eval(getters);
-                if (!value.ok()) {
-                    // may be out of limitation of double
-                    VLOG(3) << "get the orderby value fail";
-                    return kvstore::ResultCode::ERR_EXPR_FAILED;
-                }
-                auto r = value.value();
-
-                if (!(Expression::isInt(r) || Expression::isDouble(r))) {
-                    VLOG(3)<< "get the orderby value fail";
-                    return kvstore::ResultCode::ERR_EXPR_FAILED;
-                }
-                auto priorityValue = Expression::asDouble(r);
-
-                if(limitSize_ <= 0){
-                    continue;
-                }
-
-                if(resultNodeHeap.size() >= (uint64_t)limitSize_ && (priorityValue <= resultNodeHeap.top().priority)) {
-                    continue;
-                }
-
-                if (resultNodeHeap.size() >= (uint64_t)limitSize_ && priorityValue > resultNodeHeap.top().priority){
-                    resultNodeHeap.pop();
-                }
-                // if minHeapNode.size() < (uint64_t)limitSize_
-                Node node;
-                node.priority = priorityValue;
-                node.row = row;
-                resultNodeHeap.push(node);
-            } else {
-                // order by must be provided
-                return kvstore::ResultCode::ERR_INVALID_ARGUMENT;
+            if (!(Expression::isInt(r) || Expression::isDouble(r))) {
+                VLOG(3)<< "get the orderby value fail";
+                return kvstore::ResultCode::ERR_EXPR_FAILED;
+            }
+            auto score = Expression::asDouble(r);
+            if(resultNodeHeap.size() >= static_cast<size_t>(limitSize_)
+               && (score <= resultNodeHeap.front().score)) {
+                continue;
+            }
+            if (resultNodeHeap.size() >= static_cast<size_t>(limitSize_)
+                && score > resultNodeHeap.front().score) {
+                std::pop_heap(resultNodeHeap.begin(), resultNodeHeap.end());
+                resultNodeHeap.pop_back();
             }
 
+            Node node;
+            node.score = score;
+            node.row = std::move(row);
+            resultNodeHeap.emplace_back(std::move(node));
+            std::push_heap(resultNodeHeap.begin(), resultNodeHeap.end());
         } // end iter
     }
 
-
-
     std::vector<nebula::graph::cpp2::RowValue> rows;
     rows.reserve(limitSize_);
-    while( !resultNodeHeap.empty()) {
-        Node node = resultNodeHeap.top();
-        resultNodeHeap.pop();
+    for (auto& node : resultNodeHeap) {
         rows.push_back(std::move(node.row));
     }
     {

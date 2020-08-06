@@ -15,10 +15,10 @@ namespace nebula {
 namespace storage {
 
 struct Node {
-    double priority = 0;
+    double score = 0;
     nebula::graph::cpp2::RowValue row;
-    friend bool operator<(Node n1, Node n2) {
-        return n1.priority > n2.priority;
+    friend bool operator<(const Node& n1, const Node& n2) {
+        return n1.score > n2.score;
     }
 };
 
@@ -61,12 +61,10 @@ private:
     cpp2::ErrorCode buildContexts(const cpp2::GetNeighborsSampleRequest& req);
     int32_t getBucketsNum(int32_t verticesNum, int32_t minVerticesPerBucket,int32_t handlerNum);
 
-
-
     std::unique_ptr<nebula::Expression> orderBy_;
-    int64_t limitSize_;
+    int64_t limitSize_{0};
 
-    GraphSpaceID spaceId_;
+    GraphSpaceID spaceId_{0};
     std::unique_ptr<ExpressionContext> expCtx_;
     std::unordered_map<TagID, std::shared_ptr<const nebula::meta::SchemaProviderIf>>
         src_tag_schema_;
