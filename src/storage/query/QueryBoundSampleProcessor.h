@@ -58,28 +58,23 @@ private:
     bool checkExp(const Expression* exp);
     std::vector<BucketWithIndex> genBuckets();
     folly::Future<std::vector<OneVertexResp>> asyncProcessBucket(BucketWithIndex bucket);
-    cpp2::ErrorCode buildContexts(const cpp2::GetNeighborsSampleRequest& req);
+    cpp2::ErrorCode buildContexts(cpp2::GetNeighborsSampleRequest& req);
     int32_t getBucketsNum(int32_t verticesNum, int32_t minVerticesPerBucket,int32_t handlerNum);
 
-    std::unique_ptr<nebula::Expression> orderBy_;
-    int64_t limitSize_{0};
+    std::string sampleOrderBy_;
+    std::unique_ptr<nebula::Expression> sampleOrderByExpr_;
+    int64_t sampleLimitSize_{0};
 
     GraphSpaceID spaceId_{0};
     std::unique_ptr<ExpressionContext> expCtx_;
-    std::unordered_map<TagID, std::shared_ptr<const nebula::meta::SchemaProviderIf>>
-        src_tag_schema_;
-    std::unordered_map<EdgeType, std::shared_ptr<const nebula::meta::SchemaProviderIf>>
-        edge_schema_;
-    std::unordered_map<std::string, EdgeType> edgeMap_;
-    std::unordered_map<std::string, TagID> srcTagMap_;
     std::unordered_map<PartitionID, std::vector<nebula::graph::cpp2::RowValue>> inputs_;
     std::unique_ptr<nebula::meta::SchemaProviderIf> input_schema_;
     int32_t vidIndex_{-1};
     std::vector<EdgeType> edges_;
-    std::unique_ptr<Expression> filter_;
+    std::vector<TagID> tags_;
     std::vector<nebula::storage::cpp2::YieldColumn> yields_;
     std::vector<std::unique_ptr<nebula::Expression>> yields_expr_;
-    std::unordered_map<PartitionID, std::vector<std::vector<nebula::graph::cpp2::RowValue>>> sample_result_;
+    std::unordered_map<PartitionID, std::vector<std::vector<Node>>> sample_result_;
 
     folly::Executor* executor_{nullptr};
     VertexCache* vertexCache_{nullptr};

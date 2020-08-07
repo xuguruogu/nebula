@@ -56,12 +56,13 @@ static nebula::graph::cpp2::ColumnValue toColumnValue(const VariantType& value) 
     return r;
 }
 
-void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& req) {
+void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& reqConst) {
+    auto& req = const_cast<cpp2::GetNeighborsSampleRequest&>(reqConst);
     CHECK_NOTNULL(executor_);
     spaceId_ = req.get_space_id();
 
     // inputs
-    inputs_ = std::move(const_cast<std::unordered_map<PartitionID, std::vector<nebula::graph::cpp2::RowValue>>&>(req.get_parts()));
+    inputs_ = std::move(req.get_parts());
     for (auto& part : inputs_) {
         auto partId = part.first;
         auto& rows = part.second;
@@ -72,7 +73,7 @@ void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& r
     auto retCode = buildContexts(req);
 
     if (retCode != cpp2::ErrorCode::SUCCEEDED) {
-        for (auto& p : req.get_parts()) {
+        for (auto& p : inputs_) {
             this->pushResultCode(retCode, p.first);
         }
         this->onFinished();
@@ -82,6 +83,7 @@ void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& r
     auto buckets = genBuckets();
 
     std::vector<folly::Future<std::vector<OneVertexResp>>> results;
+    results.reserve(buckets.size());
     for (auto& bucket : buckets) {
         results.emplace_back(asyncProcessBucket(std::move(bucket)));
     }
@@ -111,11 +113,11 @@ void QueryBoundSampleProcessor::process(const cpp2::GetNeighborsSampleRequest& r
 
 }
 
-cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighborsSampleRequest& req) {
+cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(cpp2::GetNeighborsSampleRequest& req) {
     expCtx_ = std::make_unique<ExpressionContext>();
     // yields
     {
-        yields_ = req.get_yields();
+        yields_ = std::move(req.get_yields());
         yields_expr_.reserve(yields_.size());
         std::unordered_set<std::string> yields_colnames_set;
         for (auto& yield : yields_) {
@@ -129,6 +131,10 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
             if (!status.ok()) {
                 return cpp2::ErrorCode::E_INVALID_YIELD;
             }
+            if (!checkExp(expr.get())) {
+                VLOG(3) << "check yeild fail";
+                return cpp2::ErrorCode::E_INVALID_YIELD;
+            }
             yields_expr_.push_back(std::move(expr));
             if (yields_colnames_set.find(yield.get_alias()) != yields_colnames_set.end()) {
                 return cpp2::ErrorCode::E_DUPLICATE_COLUMNS;
@@ -139,36 +145,35 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
 
     // order by
     {
-        const auto& orderBy = req.get_sample_filter().get_order_by();
-        if (orderBy.empty()) {
+        sampleOrderBy_ = std::move(req.get_sample_filter().get_order_by());
+        if (sampleOrderBy_.empty()) {
             VLOG(1) << "check order by fail";
             return cpp2::ErrorCode::E_INVALID_FILTER;
         }
-        StatusOr<std::unique_ptr<Expression>> expRet = Expression::decode(orderBy);
+        StatusOr<std::unique_ptr<Expression>> expRet = Expression::decode(sampleOrderBy_);
         if (!expRet.ok()) {
             return cpp2::ErrorCode::E_INVALID_FILTER;
         }
 
-        orderBy_ = std::move(expRet).value();
-        orderBy_->setContext(expCtx_.get());
-        Status status = orderBy_->prepare();
+        sampleOrderByExpr_ = std::move(expRet).value();
+        sampleOrderByExpr_->setContext(expCtx_.get());
+        Status status = sampleOrderByExpr_->prepare();
         if (!status.ok()) {
+            return cpp2::ErrorCode::E_INVALID_FILTER;
+        }
+        if (!checkExp(sampleOrderByExpr_.get())) {
+            VLOG(1) << "check order by fail";
             return cpp2::ErrorCode::E_INVALID_FILTER;
         }
     }
 
     // limit
     {
-        limitSize_ = req.get_sample_filter().get_limit_size();
-        if (limitSize_ <= 0) {
+        sampleLimitSize_ = req.get_sample_filter().get_limit_size();
+        if (sampleLimitSize_ <= 0) {
             VLOG(1) << "limit should not <= 0";
             return cpp2::ErrorCode::E_INVALID_FILTER;
         }
-    }
-
-    // check dst.
-    if (expCtx_->hasDstTagProp()) {
-        return cpp2::ErrorCode::E_INVALID_DST_PROP;
     }
 
     // schema
@@ -180,14 +185,7 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
         if (!status.ok()) {
             return cpp2::ErrorCode::E_TAG_NOT_FOUND;
         }
-        auto tagId = status.value();
-        auto schema = schemaMan_->getTagSchema(spaceId_, tagId);
-        if (!schema) {
-            VLOG(3) << "Can't find spaceId " << spaceId_ << ", tagId " << tagId;
-            return cpp2::ErrorCode::E_TAG_NOT_FOUND;
-        }
-        src_tag_schema_[tagId] = schema;
-        srcTagMap_[src_prop.first] = tagId;
+        tags_.emplace_back(status.value());
     }
 
     // edge schema
@@ -196,14 +194,6 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
         if (!status.ok()) {
             return cpp2::ErrorCode::E_EDGE_NOT_FOUND;
         }
-        auto edge = status.value();
-        auto schema = schemaMan_->getEdgeSchema(spaceId_, edge);
-        if (!schema) {
-            VLOG(3) << "Can't find spaceId " << spaceId_ << ", edge " << edge;
-            return cpp2::ErrorCode::E_EDGE_NOT_FOUND;
-        }
-        edge_schema_[edge] = schema;
-        edgeMap_[alias_prop.first] = edge;
     }
 
     // edge types
@@ -211,19 +201,6 @@ cpp2::ErrorCode QueryBoundSampleProcessor::buildContexts(const cpp2::GetNeighbor
 
     // vidIndex
     vidIndex_ = req.get_vid_index();
-
-    for (auto& expr : yields_expr_) {
-        if (!checkExp(expr.get())) {
-            VLOG(3) << "check yeild fail";
-            return cpp2::ErrorCode::E_INVALID_YIELD;
-        }
-    }
-
-    if (!checkExp(orderBy_.get())) {
-        VLOG(1) << "check order by fail";
-        return cpp2::ErrorCode::E_INVALID_FILTER;
-    }
-
     return cpp2::ErrorCode::SUCCEEDED;
 }
 
@@ -304,13 +281,11 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
     // tag props
     std::vector<std::string> srcTagContents;
     std::unordered_map<TagID, RowReader> srcTagReaderMap;
-    std::unordered_map<std::string, nebula::graph::cpp2::ColumnValue> yieldVariableMap;
     std::vector<Node> resultNodeHeap;
-    resultNodeHeap.reserve(limitSize_);
+    resultNodeHeap.reserve(sampleLimitSize_);
 
     // TODO: add multiple version check
-    for (auto& src_tag_schema : src_tag_schema_) {
-        auto srcTagId = src_tag_schema.first;
+    for (auto srcTagId : tags_) {
         auto schema = this->schemaMan_->getTagSchema(spaceId_, srcTagId);
         if (FLAGS_enable_vertex_cache && vertexCache_ != nullptr) {
             auto result = vertexCache_->get(std::make_pair(vId, srcTagId));
@@ -348,7 +323,8 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
 
         if (iter && iter->valid()) {
             TagVersion tagVersion = NebulaKeyUtils::getVersionBigEndian(iter->key());
-            auto srcTagReader = RowReader::getTagPropReader(this->schemaMan_, iter->val(), spaceId_, srcTagId);
+            srcTagContents.emplace_back(iter->val());
+            auto srcTagReader = RowReader::getTagPropReader(this->schemaMan_, srcTagContents.back(), spaceId_, srcTagId);
             if (srcTagReader == nullptr) {
                 return kvstore::ResultCode::ERR_CORRUPT_DATA;
             }
@@ -393,7 +369,6 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
 
         auto schema = this->schemaMan_->getEdgeSchema(spaceId_, std::abs(edgeType));
         for (; iter->valid(); iter->next()) {
-
             auto key = iter->key();
             auto val = iter->val();
 
@@ -412,65 +387,39 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                 firstLoop = false;
             }
 
-            // edge reader
-            auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, std::abs(edgeType));
-            if (edgeReader == nullptr) {
-                return kvstore::ResultCode::ERR_CORRUPT_DATA;
-            }
             // getters
             Getters getters;
-            getters.getEdgeRank = [&rank] () -> VariantType {
+            getters.getEdgeRank = [rank] () -> VariantType {
                 return rank;
             };
-            getters.getEdgeDstId = [this, &edgeType, &dstId] (const std::string& edgeName) -> OptVariantType {
-                auto edgeFound = this->edgeMap_.find(edgeName);
-                if (edgeFound == edgeMap_.end()) {
-                    return Status::Error(
-                        "Edge `%s' not found when call getters.", edgeName.c_str());
-                }
-                if (std::abs(edgeType) != edgeFound->second) {
-                    return Status::Error("Ignore this edge");
-                }
+            getters.getEdgeDstId = [dstId] (const std::string&) -> OptVariantType {
                 return dstId;
             };
-            getters.getDstTagProp = [] (const std::string&, const std::string&) -> OptVariantType {
-                return Status::Error("try access dst prop.");
-            };
-            getters.getInputProp = [this,&yieldVariableMap, &input_row] (const std::string& prop) -> OptVariantType {
+            getters.getInputProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
                 auto propIdx= this->input_schema_->getFieldIndex(prop);
                 if (propIdx >= 0) {
                     auto& col = input_row.get_columns().at(propIdx);
                     return toVariantType(col);
-                }
-
-                if (yieldVariableMap.find(prop) != yieldVariableMap.end()) {
-                    auto& col = yieldVariableMap[prop];
-                    return toVariantType(col);;
                 }
 
                 return Status::Error("Input Prop `%s' not found.", prop.c_str());
             };
 
-            getters.getVariableProp = [this, &yieldVariableMap, &input_row] (const std::string& prop) -> OptVariantType {
+            getters.getVariableProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
                 auto propIdx= this->input_schema_->getFieldIndex(prop);
                 if (propIdx >= 0) {
                     auto& col = input_row.get_columns().at(propIdx);
-                    return toVariantType(col);
-                }
-
-                if (yieldVariableMap.find(prop) != yieldVariableMap.end()) {
-                    auto& col = yieldVariableMap[prop];
                     return toVariantType(col);
                 }
                 return Status::Error("Input Prop `%s' not found.", prop.c_str());
             };
             getters.getSrcTagProp = [this, &srcTagReaderMap, vId] (const std::string& tag, const std::string& prop) -> OptVariantType {
-                auto srcTagFound = this->srcTagMap_.find(tag);
-                if (srcTagFound == srcTagMap_.end()) {
+                StatusOr<TagID> status = schemaMan_->toEdgeType(spaceId_, tag);
+                if (!status.ok()) {
                     return Status::Error(
-                        "Src tag `%s' not found when call getters.", tag.c_str());
+                        "Tag `%s' not found when call getters.", tag.c_str());
                 }
-                TagID srcTagId = srcTagFound->second;
+                TagID srcTagId = status.value();
 
                 auto srcTagReaderFound = srcTagReaderMap.find(srcTagId);
                 if (srcTagReaderFound == srcTagReaderMap.end()) {
@@ -490,25 +439,27 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                 return value(std::move(res));
             };
 
-            getters.getAliasProp = [this, edgeType, &edgeReader, &key](const std::string& edgeName,
+            getters.getAliasProp = [this, edgeType, val, &key](const std::string& edgeName,
                                                                        const std::string& prop) -> OptVariantType {
-                auto edgeFound = this->edgeMap_.find(edgeName);
-                if (edgeFound == edgeMap_.end()) {
+                StatusOr<EdgeType> status = schemaMan_->toEdgeType(spaceId_, edgeName);
+                if (!status.ok()) {
                     return Status::Error(
                         "Edge `%s' not found when call getters.", edgeName.c_str());
                 }
-                if (std::abs(edgeType) != edgeFound->second) {
+                if (std::abs(edgeType) != status.value()) {
                     return Status::Error("Ignore this edge");
                 }
 
                 if (prop == _SRC) {
                     return NebulaKeyUtils::getSrcId(key);
-                } else if (prop == _DST) {
-                    return NebulaKeyUtils::getDstId(key);
-                } else if (prop == _RANK) {
-                    return NebulaKeyUtils::getRank(key);
                 } else if (prop == _TYPE) {
                     return static_cast<int64_t>(NebulaKeyUtils::getEdgeType(key));
+                }
+
+                // edge reader
+                auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, std::abs(edgeType));
+                if (edgeReader == nullptr) {
+                    return Status::Error("Ignore this edge");
                 }
 
                 auto res = RowReader::getPropByName(edgeReader.get(), prop);
@@ -517,6 +468,29 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                 }
                 return value(std::move(res));
             };
+
+            auto value  = sampleOrderByExpr_->eval(getters);
+            if (!value.ok()) {
+                // may be out of limitation of double
+                VLOG(3) << "get the orderby value fail";
+                return kvstore::ResultCode::ERR_EXPR_FAILED;
+            }
+            auto r = std::move(value).value();
+
+            if (!(Expression::isInt(r) || Expression::isDouble(r))) {
+                VLOG(3)<< "get the orderby value fail";
+                return kvstore::ResultCode::ERR_EXPR_FAILED;
+            }
+            auto score = Expression::asDouble(r);
+            if(resultNodeHeap.size() >= static_cast<size_t>(sampleLimitSize_)
+               && (score <= resultNodeHeap.front().score)) {
+                continue;
+            }
+            if (resultNodeHeap.size() >= static_cast<size_t>(sampleLimitSize_)
+                && score > resultNodeHeap.front().score) {
+                std::pop_heap(resultNodeHeap.begin(), resultNodeHeap.end());
+                resultNodeHeap.pop_back();
+            }
 
             // yield expr
             nebula::graph::cpp2::RowValue row;
@@ -530,33 +504,9 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
                     return kvstore::ResultCode::ERR_EXPR_FAILED;
                 }
                 auto col = toColumnValue(std::move(exprStatus).value());
-                yieldVariableMap[yields_[index].get_alias()] = col;
                 resultRow.push_back(std::move(col));
             }
             row.set_columns(std::move(resultRow));
-
-            auto value  = orderBy_->eval(getters);
-            if (!value.ok()) {
-                // may be out of limitation of double
-                VLOG(3) << "get the orderby value fail";
-                return kvstore::ResultCode::ERR_EXPR_FAILED;
-            }
-            auto r = std::move(value).value();
-
-            if (!(Expression::isInt(r) || Expression::isDouble(r))) {
-                VLOG(3)<< "get the orderby value fail";
-                return kvstore::ResultCode::ERR_EXPR_FAILED;
-            }
-            auto score = Expression::asDouble(r);
-            if(resultNodeHeap.size() >= static_cast<size_t>(limitSize_)
-               && (score <= resultNodeHeap.front().score)) {
-                continue;
-            }
-            if (resultNodeHeap.size() >= static_cast<size_t>(limitSize_)
-                && score > resultNodeHeap.front().score) {
-                std::pop_heap(resultNodeHeap.begin(), resultNodeHeap.end());
-                resultNodeHeap.pop_back();
-            }
 
             Node node;
             node.score = score;
@@ -565,22 +515,12 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             std::push_heap(resultNodeHeap.begin(), resultNodeHeap.end());
         } // end iter
     }
-
-    std::vector<nebula::graph::cpp2::RowValue> rows;
-    rows.reserve(limitSize_);
-    for (auto& node : resultNodeHeap) {
-        rows.push_back(std::move(node.row));
-    }
-    {
-        std::lock_guard<std::mutex> lg(this->lock_);
-        sample_result_[partId][idx]= std::move(rows);
-    }
+    sample_result_[partId][idx]= std::move(resultNodeHeap);
     return kvstore::ResultCode::SUCCEEDED;
 }
 
 void QueryBoundSampleProcessor::onProcessFinished() {
     // collect the result
-
     uint64_t num = 0;
     std::vector<nebula::graph::cpp2::RowValue> rows;
     for (auto& part : sample_result_) {
@@ -591,7 +531,9 @@ void QueryBoundSampleProcessor::onProcessFinished() {
     rows.reserve(num);
     for (auto& part : sample_result_) {
         for (auto& list : part.second) {
-            rows.insert(rows.end(), std::make_move_iterator(list.begin()), std::make_move_iterator(list.end()));
+            for (auto& item : list) {
+                rows.push_back(std::move(item.row));
+            }
         }
     }
 
@@ -647,73 +589,16 @@ bool QueryBoundSampleProcessor::checkExp(const Expression* exp) {
             auto* logExp = static_cast<const LogicalExpression*>(exp);
             return checkExp(logExp->left()) && checkExp(logExp->right());
         }
-        case Expression::kSourceProp: {
-            auto* sourceExp = static_cast<const SourcePropertyExpression*>(exp);
-            const auto* tagName = sourceExp->alias();
-            const auto* propName = sourceExp->prop();
-            auto tagRet = this->schemaMan_->toTagID(spaceId_, *tagName);
-            if (!tagRet.ok()) {
-                VLOG(1) << "Can't find tag " << *tagName << ", in space " << spaceId_;
-                return false;
-            }
-            auto tagId = tagRet.value();
-            // TODO(heng): Now we use the latest version.
-            auto schema = this->schemaMan_->getTagSchema(spaceId_, tagId);
-            CHECK(!!schema);
-            auto field = schema->field(*propName);
-            if (field == nullptr) {
-                VLOG(1) << "Can't find related prop " << *propName << " on tag " << tagName;
-                return false;
-            }
-            if(srcTagMap_.find(*tagName) == srcTagMap_.end()) {
-                VLOG(1) << "There is no related tag existed in srcTagMap!";
-                srcTagMap_[*tagName] = tagId;
-                src_tag_schema_[tagId] = schema;
-            }
-            return true;
-        }
+        case Expression::kSourceProp:
         case Expression::kEdgeRank:
         case Expression::kEdgeDstId:
         case Expression::kEdgeSrcId:
-        case Expression::kEdgeType: {
-            return true;
-        }
-        case Expression::kAliasProp: {
-            if (edges_.size() == 0) {
-                VLOG(1) << "No edge requested!";
-                return false;
-            }
-
-            auto* edgeExp = static_cast<const AliasPropertyExpression*>(exp);
-
-            // TODO(simon.liu) we need handle rename.
-            auto edgeStatus = this->schemaMan_->toEdgeType(spaceId_, *edgeExp->alias());
-            if (!edgeStatus.ok()) {
-                VLOG(1) << "Can't find edge " << *(edgeExp->alias());
-                return false;
-            }
-
-            auto edgeType = edgeStatus.value();
-            auto schema = this->schemaMan_->getEdgeSchema(spaceId_, std::abs(edgeType));
-            if (!schema) {
-                VLOG(1) << "Cant find edgeType " << edgeType;
-                return false;
-            }
-
-            const auto* propName = edgeExp->prop();
-            auto field = schema->field(*propName);
-            if (field == nullptr) {
-                VLOG(1) << "Can't find related prop " << *propName << " on edge "
-                        << *(edgeExp->alias());
-                return false;
-            }
-            return true;
-        }
+        case Expression::kEdgeType:
+        case Expression::kAliasProp:
         case Expression::kVariableProp:
         case Expression::kDestProp:
-        case Expression::kInputProp: {
+        case Expression::kInputProp:
             return true;
-        }
         default: {
             VLOG(1) << "Unsupport expression type! kind = "
                     << std::to_string(static_cast<uint8_t>(exp->kind()));
