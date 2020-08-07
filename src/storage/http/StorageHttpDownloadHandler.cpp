@@ -18,8 +18,6 @@
 
 DEFINE_int32(download_thread_num, 3, "download thread number");
 
-DEFINE_int32(download_keep_day, 1, "download keep day");
-
 namespace nebula {
 namespace storage {
 
@@ -41,19 +39,6 @@ void StorageHttpDownloadHandler::init(nebula::hdfs::HdfsHelper *helper,
     CHECK_NOTNULL(pool_);
     CHECK_NOTNULL(kvstore_);
     CHECK(!paths_.empty());
-}
-
-static void cleanSubdirs(const std::string &root) {
-    if (fs::FileUtils::exist(root)) {
-        auto dirs = fs::FileUtils::listAllDirsInDir(root.c_str(), true);
-        for (auto& dir : dirs) {
-            if (fs::FileUtils::fileLastUpdateTime(dir.c_str()) <
-                time::WallClock::fastNowInSec() - 60 * 60 * 24 * FLAGS_download_keep_day) {
-                LOG(INFO) << "rm download dir: " << dir;
-                fs::FileUtils::remove(dir.c_str(), true);
-            }
-        }
-    }
 }
 
 void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers) noexcept {
@@ -114,10 +99,6 @@ void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers)
         std::string downloadRootPathEdge = downloadRootPath + "/edge";
         std::string downloadRootPathTag = downloadRootPath + "/tag";
         std::string downloadRootPathGeneral = downloadRootPath + "/general";
-
-        cleanSubdirs(downloadRootPathEdge);
-        cleanSubdirs(downloadRootPathTag);
-        cleanSubdirs(downloadRootPathGeneral);
 
         std::string downloadPath;
         if (edge_.has_value()) {
