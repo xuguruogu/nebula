@@ -540,10 +540,12 @@ void QueryBoundSampleProcessor::onProcessFinished() {
     }
 
     std::vector<std::string> columns_names;
-    {
-        columns_names.reserve(yields_.size());
-        for (auto& yield : yields_) {
-            columns_names.emplace_back(yield.alias);
+    columns_names.reserve(yields_.size());
+    for (unsigned i = 0; i < yields_.size(); i++) {
+        if (!yields_[i].alias.empty()) {
+            columns_names.emplace_back(std::move(yields_[i].alias));
+        } else {
+            columns_names.emplace_back(yields_expr_[i]->toString());
         }
     }
     // set resp
