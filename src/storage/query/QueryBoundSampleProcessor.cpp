@@ -367,13 +367,97 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
         bool        firstLoop = true;
         int         cnt = 0;
 
-        auto schema = this->schemaMan_->getEdgeSchema(spaceId_, std::abs(edgeType));
-        for (; iter->valid(); iter->next()) {
-            auto key = iter->key();
-            auto val = iter->val();
+        EdgeRanking rank = 0;
+        VertexID dstId = 0;
+        folly::StringPiece key, val;
 
-            auto rank = NebulaKeyUtils::getRank(key);
-            auto dstId = NebulaKeyUtils::getDstId(key);
+        // getters
+        Getters getters;
+        getters.getEdgeRank = [&rank] () -> VariantType {
+            return rank;
+        };
+        getters.getEdgeDstId = [&dstId] (const std::string&) -> OptVariantType {
+            return dstId;
+        };
+        getters.getInputProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
+            auto propIdx= this->input_schema_->getFieldIndex(prop);
+            if (propIdx >= 0) {
+                auto& col = input_row.get_columns().at(propIdx);
+                return toVariantType(col);
+            }
+            return Status::Error("Input Prop `%s' not found.", prop.c_str());
+        };
+
+        getters.getVariableProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
+            auto propIdx= this->input_schema_->getFieldIndex(prop);
+            if (propIdx >= 0) {
+                auto& col = input_row.get_columns().at(propIdx);
+                return toVariantType(col);
+            }
+            return Status::Error("Input Prop `%s' not found.", prop.c_str());
+        };
+        getters.getSrcTagProp = [this, &srcTagReaderMap, &vId] (const std::string& tag, const std::string& prop) -> OptVariantType {
+            StatusOr<TagID> status = schemaMan_->toEdgeType(spaceId_, tag);
+            if (!status.ok()) {
+                return Status::Error(
+                    "Tag `%s' not found when call getters.", tag.c_str());
+            }
+            TagID srcTagId = status.value();
+
+            auto srcTagReaderFound = srcTagReaderMap.find(srcTagId);
+            if (srcTagReaderFound == srcTagReaderMap.end()) {
+                return Status::Error(
+                    "Src tag `%s' not found when call getters.", tag.c_str());
+            }
+            auto& srcTagReader = srcTagReaderFound->second;
+
+            if (prop == _ID) {
+                return vId;
+            }
+
+            auto res = RowReader::getPropByName(srcTagReader.get(), prop);
+            if (!ok(res)) {
+                return Status::Error("Invalid src tag prop");
+            }
+            return value(std::move(res));
+        };
+
+        getters.getAliasProp = [this, &edgeType, &val, &key](const std::string& edgeName,
+                                                           const std::string& prop) -> OptVariantType {
+            StatusOr<EdgeType> status = schemaMan_->toEdgeType(spaceId_, edgeName);
+            if (!status.ok()) {
+                return Status::Error(
+                    "Edge `%s' not found when call getters.", edgeName.c_str());
+            }
+            if (std::abs(edgeType) != status.value()) {
+                return Status::Error("Ignore this edge");
+            }
+
+            if (prop == _SRC) {
+                return NebulaKeyUtils::getSrcId(key);
+            } else if (prop == _TYPE) {
+                return static_cast<int64_t>(NebulaKeyUtils::getEdgeType(key));
+            }
+
+            // edge reader
+            auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, std::abs(edgeType));
+            if (edgeReader == nullptr) {
+                return Status::Error("Ignore this edge");
+            }
+
+            auto res = RowReader::getPropByName(edgeReader.get(), prop);
+            if (!ok(res)) {
+                return Status::Error("Invalid Edge Prop");
+            }
+            return value(std::move(res));
+        };
+
+        for (; iter->valid(); iter->next()) {
+            key = iter->key();
+            val = iter->val();
+
+            rank = NebulaKeyUtils::getRank(key);
+            dstId = NebulaKeyUtils::getDstId(key);
 
             if (!firstLoop && rank == lastRank && lastDstId == dstId) {
                 VLOG(3) << "Only get the latest version for each edge.";
@@ -386,88 +470,6 @@ kvstore::ResultCode QueryBoundSampleProcessor::processVertex(PartitionID partId,
             if (firstLoop) {
                 firstLoop = false;
             }
-
-            // getters
-            Getters getters;
-            getters.getEdgeRank = [rank] () -> VariantType {
-                return rank;
-            };
-            getters.getEdgeDstId = [dstId] (const std::string&) -> OptVariantType {
-                return dstId;
-            };
-            getters.getInputProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
-                auto propIdx= this->input_schema_->getFieldIndex(prop);
-                if (propIdx >= 0) {
-                    auto& col = input_row.get_columns().at(propIdx);
-                    return toVariantType(col);
-                }
-
-                return Status::Error("Input Prop `%s' not found.", prop.c_str());
-            };
-
-            getters.getVariableProp = [this, &input_row] (const std::string& prop) -> OptVariantType {
-                auto propIdx= this->input_schema_->getFieldIndex(prop);
-                if (propIdx >= 0) {
-                    auto& col = input_row.get_columns().at(propIdx);
-                    return toVariantType(col);
-                }
-                return Status::Error("Input Prop `%s' not found.", prop.c_str());
-            };
-            getters.getSrcTagProp = [this, &srcTagReaderMap, vId] (const std::string& tag, const std::string& prop) -> OptVariantType {
-                StatusOr<TagID> status = schemaMan_->toEdgeType(spaceId_, tag);
-                if (!status.ok()) {
-                    return Status::Error(
-                        "Tag `%s' not found when call getters.", tag.c_str());
-                }
-                TagID srcTagId = status.value();
-
-                auto srcTagReaderFound = srcTagReaderMap.find(srcTagId);
-                if (srcTagReaderFound == srcTagReaderMap.end()) {
-                    return Status::Error(
-                        "Src tag `%s' not found when call getters.", tag.c_str());
-                }
-                auto& srcTagReader = srcTagReaderFound->second;
-
-                if (prop == _ID) {
-                    return vId;
-                }
-
-                auto res = RowReader::getPropByName(srcTagReader.get(), prop);
-                if (!ok(res)) {
-                    return Status::Error("Invalid src tag prop");
-                }
-                return value(std::move(res));
-            };
-
-            getters.getAliasProp = [this, edgeType, val, &key](const std::string& edgeName,
-                                                                       const std::string& prop) -> OptVariantType {
-                StatusOr<EdgeType> status = schemaMan_->toEdgeType(spaceId_, edgeName);
-                if (!status.ok()) {
-                    return Status::Error(
-                        "Edge `%s' not found when call getters.", edgeName.c_str());
-                }
-                if (std::abs(edgeType) != status.value()) {
-                    return Status::Error("Ignore this edge");
-                }
-
-                if (prop == _SRC) {
-                    return NebulaKeyUtils::getSrcId(key);
-                } else if (prop == _TYPE) {
-                    return static_cast<int64_t>(NebulaKeyUtils::getEdgeType(key));
-                }
-
-                // edge reader
-                auto edgeReader = RowReader::getEdgePropReader(this->schemaMan_, val, spaceId_, std::abs(edgeType));
-                if (edgeReader == nullptr) {
-                    return Status::Error("Ignore this edge");
-                }
-
-                auto res = RowReader::getPropByName(edgeReader.get(), prop);
-                if (!ok(res)) {
-                    return Status::Error("Invalid Edge Prop");
-                }
-                return value(std::move(res));
-            };
 
             auto value  = sampleOrderByExpr_->eval(getters);
             if (!value.ok()) {
