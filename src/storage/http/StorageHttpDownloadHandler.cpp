@@ -201,7 +201,8 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         }
         bool exist = existStatus.value();
         if (!exist) {
-            LOG(WARNING) << "Hdfs path non exist. hdfs://" << hdfsHost_ << ":" << hdfsPort_ << hdfsPartPath;
+            LOG(WARNING) << "Hdfs path non exist. hdfs://"
+                         << hdfsHost_ << ":" << hdfsPort_ << hdfsPartPath;
             continue;
         }
         auto partResult = kvstore_->part(spaceID_, partId);
@@ -224,9 +225,11 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         }
 
         auto downloader = [this, hdfsPartPath, localPath] {
-            auto resultStatus = this->helper_->copyToLocal(hdfsHost_, hdfsPort_, hdfsPartPath, localPath);
+            auto resultStatus = this->helper_->copyToLocal(
+                hdfsHost_, hdfsPort_, hdfsPartPath, localPath);
             if (!resultStatus.ok()) {
-                LOG(ERROR) << "Run Hdfs CopyToLocal failed. " << resultStatus.status().toString();
+                LOG(ERROR) << "Run Hdfs CopyToLocal failed. "
+                           << resultStatus.status().toString();
                 return false;
             }
             auto result = std::move(resultStatus).value();

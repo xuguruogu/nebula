@@ -53,7 +53,8 @@ StatusOr<std::string> HdfsCommandHelper::copyToLocal(const std::string& hdfsHost
         LOG(INFO) << "HDFS Command Failed. " << result;
         return Status::Error(result);
     } else if (!result.empty()) {
-        LOG(INFO) << "HDFS Command Failed. command: [" << command << "], output: [" << result << "]";
+        LOG(INFO) << "HDFS Command Failed. command: ["
+                  << command << "], output: [" << result << "]";
         return Status::Error(folly::stringPrintf(
             "HDFS Command Failed. command: [%s], output: [%s]",
             command.c_str(), result.c_str()));
@@ -81,7 +82,8 @@ StatusOr<bool> HdfsCommandHelper::exist(const std::string& hdfsHost,
         LOG(INFO) << "HDFS Command Failed. " << result;
         return false;
     } else if (!result.empty()) {
-        LOG(INFO) << "HDFS Command Failed. command: [" << command << "], output: [" << result << "]";
+        LOG(INFO) << "HDFS Command Failed. command: ["
+                  << command << "], output: [" << result << "]";
         return Status::Error(folly::stringPrintf(
             "HDFS Command Failed. command: [%s], output: [%s]",
             command.c_str(), result.c_str()));

@@ -43,7 +43,6 @@ public:
 private:
     bool downloadSSTFiles();
 
-
 private:
     HttpCode err_{HttpCode::SUCCEEDED};
     GraphSpaceID spaceID_;
