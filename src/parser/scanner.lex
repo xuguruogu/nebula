@@ -170,6 +170,7 @@ CONTAINS                    ([Cc][Oo][Nn][Tt][Aa][Ii][Nn][Ss])
 SAMPLE                      ([Ss][Aa][Mm][Pp][Ll][Ee])
 
 LABEL                       ([_a-zA-Z][_a-zA-Z0-9]*)
+LABEL_SPECIFIC              ([$-^._a-zA-Z0-9]+)
 DEC                         ([0-9])
 EXP                         ([eE][-+]?[0-9]*)
 HEX                         ([0-9a-fA-F])
@@ -394,7 +395,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
                                 }
                                 return TokenType::LABEL;
                             }
-\`{LABEL}\`                 {
+\`{LABEL_SPECIFIC}\`        {
                                 yylval->strval = new std::string(yytext + 1, yyleng - 2);
                                 if (yylval->strval->size() > MAX_STRING) {
                                     auto error = "Out of range of the LABEL length, "
