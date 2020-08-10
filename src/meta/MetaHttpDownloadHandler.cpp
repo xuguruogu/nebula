@@ -197,7 +197,7 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
     if (partNumber == 0 || partNumber > partSize) {
         LOG(ERROR) << "HDFS part number not valid parts in hdfs: "
                    << partNumber << ", parts: " << partSize
-                   << "\n" << lsContent;
+                   << ", ls: [" << lsContent << "]";
         return false;
     }
 
