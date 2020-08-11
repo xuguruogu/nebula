@@ -645,7 +645,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromResps(std::vector<RpcResponse>::i
             if (!resp.__isset.vertices) {
                 continue;
             }
-            num += vertices->size();
+            num += resp.vertices.size();
         }
     }
 
@@ -658,7 +658,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromResps(std::vector<RpcResponse>::i
                 continue;
             }
 
-            for (const auto &vdata : *vertices) {
+            for (const auto &vdata : resp.vertices) {
                 for (const auto &edata : vdata.edge_data) {
                     for (const auto& edge : edata.get_edges()) {
                         auto dst = edge.get_dst();
@@ -687,7 +687,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromRespWithBackTrack(const RpcRespon
             continue;
         }
 
-        for (const auto &vdata : *vertices) {
+        for (const auto &vdata : resp.vertices) {
             for (const auto &edata : vdata.edge_data) {
                 for (const auto& edge : edata.get_edges()) {
                     auto dst = edge.get_dst();
