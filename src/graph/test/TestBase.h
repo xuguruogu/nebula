@@ -228,13 +228,6 @@ protected:
         }
 
         for (decltype(rows.size()) i = 0; i < rows.size(); ++i) {
-            std::cout << rows[i] << " vs. " << expected[i] << std::endl;
-        }
-
-        std::cout << "......................." << std::endl;
-
-        for (decltype(rows.size()) i = 0; i < rows.size(); ++i) {
-            std::cout << rows[i] << " vs. " << expected[i] << std::endl;
             if (rows[i] != expected[i]) {
                 return TestError() << rows[i] << " vs. " << expected[i];
             }
