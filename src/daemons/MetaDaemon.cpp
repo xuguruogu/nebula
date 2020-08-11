@@ -166,6 +166,7 @@ int main(int argc, char *argv[]) {
     // Detect if the server has already been started
     // Check pid before glog init, in case of user may start daemon twice
     // the 2nd will make the 1st failed to output log anymore
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
     auto pidPath = FLAGS_pid_file;
     auto status = ProcessUtils::isPidAvailable(pidPath);
     if (!status.ok()) {
@@ -181,7 +182,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Setup logging
-    auto status = setupLogging();
+    status = setupLogging();
     if (!status.ok()) {
         LOG(ERROR) << status;
         return EXIT_FAILURE;
@@ -191,14 +192,6 @@ int main(int argc, char *argv[]) {
         google::SetStderrLogging(google::FATAL);
     } else {
         google::SetStderrLogging(google::INFO);
-    }
-
-    // Detect if the server has already been started
-    auto pidPath = FLAGS_pid_file;
-    status = ProcessUtils::isPidAvailable(pidPath);
-    if (!status.ok()) {
-        LOG(ERROR) << status;
-        return EXIT_FAILURE;
     }
 
     if (FLAGS_daemonize) {
