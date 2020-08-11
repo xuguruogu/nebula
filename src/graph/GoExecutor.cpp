@@ -642,8 +642,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromResps(std::vector<RpcResponse>::i
     size_t num = 0;
     for (auto it = begin; it != end; ++it) {
         for (const auto &resp : it->responses()) {
-            auto *vertices = resp.get_vertices();
-            if (vertices == nullptr) {
+            if (!resp.__isset.vertices) {
                 continue;
             }
             num += vertices->size();
@@ -655,8 +654,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromResps(std::vector<RpcResponse>::i
 
     for (auto it = begin; it != end; ++it) {
         for (const auto &resp : it->responses()) {
-            auto *vertices = resp.get_vertices();
-            if (vertices == nullptr) {
+            if (!resp.__isset.vertices) {
                 continue;
             }
 
@@ -685,8 +683,7 @@ std::vector<VertexID> GoExecutor::getDstIdsFromRespWithBackTrack(const RpcRespon
     std::multimap<VertexID, VertexID> backTrace;
     std::unordered_set<VertexID> set;
     for (const auto &resp : rpcResp.responses()) {
-        auto *vertices = resp.get_vertices();
-        if (vertices == nullptr) {
+        if (!resp.__isset.vertices) {
             continue;
         }
 
@@ -1363,12 +1360,10 @@ void GoExecutor::VertexHolder::add(
     const std::vector<storage::cpp2::QueryResponse> &responses) {
     size_t num = 0;
     for (auto& resp : responses) {
-        auto *vertices = resp.get_vertices();
-        auto *vertexSchema = resp.get_vertex_schema();
-        if (vertices == nullptr || vertexSchema == nullptr) {
+        if (!resp.__isset.vertices || !resp.__isset.vertex_schema) {
             continue;
         }
-        for (auto &vdata : *vertices) {
+        for (auto &vdata : resp.vertices) {
             num += vdata.tag_data.size();
         }
     }
@@ -1376,15 +1371,13 @@ void GoExecutor::VertexHolder::add(
     data_.reserve(num);
 
     for (auto& resp : responses) {
-        auto *vertices = resp.get_vertices();
-        auto *vertexSchema = resp.get_vertex_schema();
-        if (vertices == nullptr || vertexSchema == nullptr) {
+        if (!resp.__isset.vertices || !resp.__isset.vertex_schema) {
             continue;
         }
 
         std::transform(
-            vertexSchema->cbegin(),
-            vertexSchema->cend(),
+            resp.vertex_schema.cbegin(),
+            resp.vertex_schema.cend(),
             std::inserter(
                 tagSchemaMap_,
                 tagSchemaMap_.begin()),
@@ -1394,7 +1387,7 @@ void GoExecutor::VertexHolder::add(
                     std::make_shared<ResultSchemaProvider>(s.second));
             });
 
-        for (auto &vdata : *vertices) {
+        for (auto &vdata : resp.vertices) {
             auto vid = vdata.get_vertex_id();
             for (auto &td : vdata.tag_data) {
                 DCHECK(td.__isset.data);
