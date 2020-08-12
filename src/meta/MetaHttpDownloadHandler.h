@@ -50,6 +50,7 @@ private:
     GraphSpaceID spaceID_;
     folly::Optional<TagID> tag_;
     folly::Optional<EdgeType> edge_;
+    folly::Optional<std::string> options_;
     nebula::kvstore::KVStore *kvstore_;
     nebula::hdfs::HdfsHelper *helper_;
     nebula::thread::GenericThreadPool *pool_;

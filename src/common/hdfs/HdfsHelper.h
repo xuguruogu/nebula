@@ -19,19 +19,23 @@ public:
 
     virtual StatusOr<std::string> ls(const std::string& hdfsHost,
                                      int32_t hdfsPort,
-                                     const std::string& hdfsPath) = 0;
+                                     const std::string& hdfsPath,
+                                     folly::Optional<std::string> options = {}) = 0;
 
     virtual StatusOr<std::string> copyToLocal(const std::string& hdfsHost,
                                               int32_t hdfsPort,
                                               const std::string& hdfsPath,
-                                              const std::string& localPath) = 0;
+                                              const std::string& localPath,
+                                              folly::Optional<std::string> options = {}) = 0;
 
     virtual StatusOr<bool> exist(const std::string& hdfsHost,
                                  int32_t hdfsPort,
-                                 const std::string& hdfsPath) {
+                                 const std::string& hdfsPath,
+                                 folly::Optional<std::string> options = {}) {
         UNUSED(hdfsHost);
         UNUSED(hdfsPort);
         UNUSED(hdfsPath);
+        UNUSED(options);
         return true;
     }
 

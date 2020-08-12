@@ -312,6 +312,10 @@ std::string DownloadSentence::toString() const {
         " HDFS \"%s:%d/%s\"",
         host_.get()->c_str(), port_, path_.get()->c_str());
 
+    if (options()) {
+        buf += " edge ";
+        buf += *edge();
+    }
     return buf;
 }
 

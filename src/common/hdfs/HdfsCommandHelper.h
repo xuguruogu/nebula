@@ -16,16 +16,19 @@ class HdfsCommandHelper : public HdfsHelper {
 public:
     StatusOr<std::string> ls(const std::string& hdfsHost,
                              int32_t hdfsPort,
-                             const std::string& hdfsPath) override;
+                             const std::string& hdfsPath,
+                             folly::Optional<std::string> options) override;
 
     StatusOr<std::string> copyToLocal(const std::string& hdfsHost,
                                       int32_t hdfsPort,
                                       const std::string& hdfsPath,
-                                      const std::string& localPath) override;
+                                      const std::string& localPath,
+                                      folly::Optional<std::string> options) override;
 
     StatusOr<bool> exist(const std::string& hdfsHost,
                          int32_t hdfsPort,
-                         const std::string& hdfsPath) override;
+                         const std::string& hdfsPath,
+                         folly::Optional<std::string> options) override;
 
     bool checkHadoopPath() override;
 };

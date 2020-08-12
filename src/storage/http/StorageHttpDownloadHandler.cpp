@@ -61,8 +61,10 @@ void StorageHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers)
     hdfsHost_ = headers->getQueryParam("host");
     hdfsPort_ = headers->getIntQueryParam("port");
     hdfsPath_ = headers->getQueryParam("path");
-
-    auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_);
+    if (headers->hasQueryParam("options")) {
+        options_.assign(headers->getQueryParam("options"));
+    }
+    auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_, options_);
     if (!existStatus.ok()) {
         LOG(ERROR) << "Run Hdfs Test failed. " << existStatus.status().toString();
         err_ = HttpCode::E_ILLEGAL_ARGUMENT;
@@ -194,7 +196,7 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
         }
 
         auto hdfsPartPath = folly::stringPrintf("%s/%d", hdfsPath_.c_str(), partId);
-        auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPartPath);
+        auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPartPath, options_);
         if (!existStatus.ok()) {
             LOG(ERROR) << "Run Hdfs Test failed. " << existStatus.status().toString();
             return false;
@@ -226,7 +228,7 @@ bool StorageHttpDownloadHandler::downloadSSTFiles() {
 
         auto downloader = [this, hdfsPartPath, localPath] {
             auto resultStatus = this->helper_->copyToLocal(
-                hdfsHost_, hdfsPort_, hdfsPartPath, localPath);
+                hdfsHost_, hdfsPort_, hdfsPartPath, localPath, options_);
             if (!resultStatus.ok()) {
                 LOG(ERROR) << "Run Hdfs CopyToLocal failed. "
                            << resultStatus.status().toString();

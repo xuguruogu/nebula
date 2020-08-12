@@ -16,8 +16,9 @@ class MockHdfsOKHelper : public nebula::hdfs::HdfsHelper {
 public:
     StatusOr<std::string> ls(const std::string& hdfsHost,
                              int32_t hdfsPort,
-                             const std::string& hdfsPath) override {
-        UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(hdfsPath);
+                             const std::string& hdfsPath,
+                             folly::Optional<std::string> options) override {
+        UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(hdfsPath); UNUSED(options);
         sleep(1);
         return "total 2\n0000.sst\n000.sst";
     }
@@ -25,8 +26,10 @@ public:
     StatusOr<std::string> copyToLocal(const std::string& hdfsHost,
                                       int32_t hdfsPort,
                                       const std::string& hdfsPath,
-                                      const std::string& localPath) override {
+                                      const std::string& localPath,
+                                      folly::Optional<std::string> options) override {
         UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(hdfsPath); UNUSED(localPath);
+        UNUSED(options);
         sleep(1);
         return "";
     }
@@ -40,8 +43,9 @@ class MockHdfsNotExistHelper : public nebula::hdfs::HdfsHelper {
 public:
     StatusOr<std::string> ls(const std::string& hdfsHost,
                              int32_t hdfsPort,
-                             const std::string& hdfsPath) override {
-        UNUSED(hdfsHost); UNUSED(hdfsPort);
+                             const std::string& hdfsPath,
+                             folly::Optional<std::string> options) override {
+        UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(options);
         sleep(1);
         return Status::Error(folly::stringPrintf("HDFS Path %s Not Exist", hdfsPath.c_str()));
     }
@@ -49,8 +53,9 @@ public:
     StatusOr<std::string> copyToLocal(const std::string& hdfsHost,
                                       int32_t hdfsPort,
                                       const std::string& hdfsPath,
-                                      const std::string& localPath) override {
-        UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(localPath);
+                                      const std::string& localPath,
+                                      folly::Optional<std::string> options) override {
+        UNUSED(hdfsHost); UNUSED(hdfsPort); UNUSED(localPath); UNUSED(options);
         sleep(1);
         return Status::Error(folly::stringPrintf("HDFS Path %s Not Exist", hdfsPath.c_str()));
     }

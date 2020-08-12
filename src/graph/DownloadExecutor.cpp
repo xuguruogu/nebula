@@ -80,6 +80,9 @@ void DownloadExecutor::execute() {
             metaHost.c_str(), FLAGS_ws_meta_http_port,
             hdfsHost->c_str(), hdfsPort, hdfsPath->c_str(), spaceId);
     }
+    if (sentence_->options()) {
+        url += "&options=" + *sentence_->options();
+    }
 
     auto func = [url] {
         auto result = http::HttpClient::get(url);

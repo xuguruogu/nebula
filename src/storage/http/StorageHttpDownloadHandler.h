@@ -48,6 +48,7 @@ private:
     GraphSpaceID spaceID_;
     folly::Optional<TagID> tag_;
     folly::Optional<EdgeType> edge_;
+    folly::Optional<std::string> options_;
     std::string hdfsHost_;
     int32_t hdfsPort_;
     std::string hdfsPath_;

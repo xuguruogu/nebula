@@ -612,6 +612,14 @@ public:
         return tag_.get();
     }
 
+    void setOptions(std::string* options) {
+        options_.reset(options);
+    }
+
+    const std::string* options() const {
+        return options_.get();
+    }
+
     std::string toString() const override;
 
 private:
@@ -620,6 +628,7 @@ private:
     std::unique_ptr<std::string>                path_;
     std::unique_ptr<std::string>                edge_;
     std::unique_ptr<std::string>                tag_;
+    std::unique_ptr<std::string>                options_;
 };
 
 class IngestSentence final : public Sentence {

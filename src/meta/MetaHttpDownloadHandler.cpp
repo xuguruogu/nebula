@@ -59,7 +59,10 @@ void MetaHttpDownloadHandler::onRequest(std::unique_ptr<HTTPMessage> headers) no
     hdfsHost_ = headers->getQueryParam("host");
     hdfsPort_ = headers->getIntQueryParam("port");
     hdfsPath_ = headers->getQueryParam("path");
-    auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_);
+    if (headers->hasQueryParam("options")) {
+        options_.assign(headers->getQueryParam("options"));
+    }
+    auto existStatus = helper_->exist(hdfsHost_, hdfsPort_, hdfsPath_, options_);
     if (!existStatus.ok()) {
         LOG(ERROR) << "Run Hdfs Test failed. hdfs://"
                    << hdfsHost_ << ":" << hdfsPort_ << hdfsPath_;
@@ -157,7 +160,7 @@ void MetaHttpDownloadHandler::onError(ProxygenError error) noexcept {
 }
 
 bool MetaHttpDownloadHandler::dispatchSSTFiles() {
-    auto result = helper_->ls(hdfsHost_, hdfsPort_, hdfsPath_);
+    auto result = helper_->ls(hdfsHost_, hdfsPort_, hdfsPath_, options_);
     if (!result.ok()) {
         LOG(ERROR) << "Dispatch SSTFile Failed. " << result.status();
         return false;
@@ -227,6 +230,9 @@ bool MetaHttpDownloadHandler::dispatchSSTFiles() {
                 storageIP.c_str(), FLAGS_ws_storage_http_port,
                 hdfsHost_.c_str(), hdfsPort_, hdfsPath_.c_str(),
                 partsStr.c_str(), spaceID_);
+        }
+        if (options_.hasValue()) {
+            url += "&options=" + options_.value();
         }
 
         auto dispatcher = [url] {

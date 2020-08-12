@@ -113,7 +113,7 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %token KW_DROP KW_REMOVE KW_SPACES KW_INGEST KW_INDEX KW_INDEXES
 %token KW_IF KW_NOT KW_EXISTS KW_WITH
 %token KW_COUNT KW_COUNT_DISTINCT KW_SUM KW_AVG KW_MAX KW_MIN KW_STD KW_BIT_AND KW_BIT_OR KW_BIT_XOR KW_COLLECT_LIST KW_COLLECT_SET
-%token KW_BY KW_DOWNLOAD KW_HDFS KW_UUID KW_CONFIGS KW_FORCE KW_STATUS
+%token KW_BY KW_DOWNLOAD KW_HDFS KW_UUID KW_CONFIGS KW_FORCE KW_STATUS KW_OPTIONS
 %token KW_GET KW_DECLARE KW_GRAPH KW_META KW_STORAGE
 %token KW_TTL KW_TTL_DURATION KW_TTL_COL KW_DATA KW_STOP
 %token KW_ACTIVE_VERSION KW_MAX_VERSION KW_MIN_VERSION KW_LATEST_SECONDS KW_RESERVE_VERSIONS
@@ -312,6 +312,7 @@ unreserved_keyword
      | KW_PARTS              { $$ = new std::string("parts"); }
      | KW_DEFAULT            { $$ = new std::string("default"); }
      | KW_CONFIGS            { $$ = new std::string("configs"); }
+     | KW_OPTIONS            { $$ = new std::string("options"); }
      | KW_ACCOUNT            { $$ = new std::string("account"); }
      | KW_HDFS               { $$ = new std::string("hdfs"); }
      | KW_PARTITION_NUM      { $$ = new std::string("partition_num"); }
@@ -1697,16 +1698,36 @@ download_sentence
         sentence->setUrl($3);
         $$ = sentence;
     }
+    | KW_DOWNLOAD KW_HDFS STRING KW_OPTIONS STRING {
+        auto sentence = new DownloadSentence();
+        sentence->setUrl($3);
+        sentence->setOptions($5);
+        $$ = sentence;
+    }
     | KW_DOWNLOAD KW_EDGE name_label KW_HDFS STRING {
         auto sentence = new DownloadSentence();
         sentence->setEdge($3);
         sentence->setUrl($5);
         $$ = sentence;
     }
+    | KW_DOWNLOAD KW_EDGE name_label KW_HDFS STRING KW_OPTIONS STRING {
+        auto sentence = new DownloadSentence();
+        sentence->setEdge($3);
+        sentence->setUrl($5);
+        sentence->setOptions($7);
+        $$ = sentence;
+    }
     | KW_DOWNLOAD KW_TAG name_label KW_HDFS STRING {
         auto sentence = new DownloadSentence();
         sentence->setTag($3);
         sentence->setUrl($5);
+        $$ = sentence;
+    }
+    | KW_DOWNLOAD KW_TAG name_label KW_HDFS STRING KW_OPTIONS STRING {
+        auto sentence = new DownloadSentence();
+        sentence->setTag($3);
+        sentence->setUrl($5);
+        sentence->setOptions($7);
         $$ = sentence;
     }
     ;

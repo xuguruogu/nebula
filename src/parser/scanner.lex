@@ -127,6 +127,7 @@ ASC                         ([Aa][Ss][Cc])
 DISTINCT                    ([Dd][Ii][Ss][Tt][Ii][Nn][Cc][Tt])
 DEFAULT                     ([Dd][Ee][Ff][Aa][Uu][Ll][Tt])
 CONFIGS                     ([Cc][Oo][Nn][Ff][Ii][Gg][Ss])
+OPTIONS                     ([Oo][Pp][Tt][Ii][Oo][Nn][Ss])
 GET                         ([Gg][Ee][Tt])
 GRAPH                       ([Gg][Rr][Aa][Pp][Hh])
 META                        ([Mm][Ee][Tt][Aa])
@@ -322,6 +323,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {DEFAULT}                   { return TokenType::KW_DEFAULT; }
 {HDFS}                      { return TokenType::KW_HDFS; }
 {CONFIGS}                   { return TokenType::KW_CONFIGS; }
+{OPTIONS}                   { return TokenType::KW_OPTIONS; }
 {TTL_DURATION}              { return TokenType::KW_TTL_DURATION; }
 {TTL_COL}                   { return TokenType::KW_TTL_COL; }
 {ACTIVE_VERSION}            { return TokenType::KW_ACTIVE_VERSION; }

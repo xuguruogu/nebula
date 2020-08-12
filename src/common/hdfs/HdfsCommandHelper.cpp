@@ -12,9 +12,18 @@ namespace hdfs {
 
 StatusOr<std::string> HdfsCommandHelper::ls(const std::string& hdfsHost,
                                             int32_t hdfsPort,
-                                            const std::string& hdfsPath) {
-    auto command = folly::stringPrintf("hadoop fs -ls hdfs://%s:%d%s",
-                                       hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
+                                            const std::string& hdfsPath,
+                                            folly::Optional<std::string> options) {
+    std::string command;
+    if (options.hasValue()) {
+        command = folly::stringPrintf(
+            "hadoop fs %s -ls hdfs://%s:%d%s",
+            options.value().c_str(), hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
+    } else {
+        command = folly::stringPrintf(
+            "hadoop fs -ls hdfs://%s:%d%s",
+            hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
+    }
     LOG(INFO) << "Start Running HDFS Command: [" << command << "]";
     auto resultStatus = ProcessUtils::runCommand(command.c_str());
     if (!resultStatus.ok()) {
@@ -36,10 +45,19 @@ StatusOr<std::string> HdfsCommandHelper::ls(const std::string& hdfsHost,
 StatusOr<std::string> HdfsCommandHelper::copyToLocal(const std::string& hdfsHost,
                                                      int32_t hdfsPort,
                                                      const std::string& hdfsPath,
-                                                     const std::string& localPath) {
-    auto command = folly::stringPrintf("hadoop fs -copyToLocal hdfs://%s:%d%s %s",
-                                       hdfsHost.c_str(), hdfsPort, hdfsPath.c_str(),
-                                       localPath.c_str());
+                                                     const std::string& localPath,
+                                                     folly::Optional<std::string> options) {
+    std::string command;
+    if (options.hasValue()) {
+        command = folly::stringPrintf(
+            "hadoop fs %s -copyToLocal hdfs://%s:%d%s %s",
+            options.value().c_str(), hdfsHost.c_str(), hdfsPort, hdfsPath.c_str(),
+            localPath.c_str());
+    } else {
+        command = folly::stringPrintf(
+            "hadoop fs -copyToLocal hdfs://%s:%d%s %s",
+            hdfsHost.c_str(), hdfsPort, hdfsPath.c_str(), localPath.c_str());
+    }
     LOG(INFO) << "Start Running HDFS Command: [" << command << "]";
     auto resultStatus = ProcessUtils::runCommand(command.c_str());
     if (!resultStatus.ok()) {
@@ -66,9 +84,19 @@ StatusOr<std::string> HdfsCommandHelper::copyToLocal(const std::string& hdfsHost
 
 StatusOr<bool> HdfsCommandHelper::exist(const std::string& hdfsHost,
                                         int32_t hdfsPort,
-                                        const std::string& hdfsPath) {
-    auto path = folly::stringPrintf("hdfs://%s:%d%s", hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
-    auto command = folly::stringPrintf("hadoop fs -test -e %s", path.c_str());
+                                        const std::string& hdfsPath,
+                                        folly::Optional<std::string> options) {
+    auto path = folly::stringPrintf(
+        "hdfs://%s:%d%s",
+        hdfsHost.c_str(), hdfsPort, hdfsPath.c_str());
+    std::string command;
+    if (options.hasValue()) {
+        command = folly::stringPrintf(
+            "hadoop fs %s -test -e %s",
+            options.value().c_str(), path.c_str());
+    } else {
+        command = folly::stringPrintf("hadoop fs -test -e %s", path.c_str());
+    }
     LOG(INFO) << "Start Running HDFS Command: [" << command << "]";
     auto resultStatus = ProcessUtils::runCommand(command.c_str());
     if (!resultStatus.ok()) {
