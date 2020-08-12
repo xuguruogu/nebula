@@ -1246,8 +1246,6 @@ bool GoExecutor::processFinalResult(Callback cb) const {
                 VLOG(1) << "Total vdata.edge_data size " << vdata.edge_data.size();
                 tagData = &vdata.get_tag_data();
                 srcId = vdata.get_vertex_id();
-                const auto roots = getRoots(srcId, recordIn);
-                auto inputRows = index_->rowsOfVids(roots);
 
                 auto func = [&] () mutable {
                     for (const auto &edata : vdata.edge_data) {
@@ -1312,6 +1310,8 @@ bool GoExecutor::processFinalResult(Callback cb) const {
                         return false;
                     }
                 } else {
+                    const auto roots = getRoots(srcId, recordIn);
+                    auto inputRows = index_->rowsOfVids(roots);
                     for (auto row : inputRows) {
                         inputRow = row;
                         if (!func()) {
