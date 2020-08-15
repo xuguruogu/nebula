@@ -61,8 +61,10 @@ std::string ScanSentence::toString() const {
     buf.reserve(256);
     buf += "SCAN VERTEX ";
     buf += tag();
-    buf += " ";
-    buf += "PART " + partition()->toString();
+    if (partition() != nullptr) {
+        buf += " ";
+        buf += "PART " + partition()->toString();
+    }
     if (from() != nullptr) {
         buf += " ";
         buf += "FROM " + from()->toString();

@@ -28,6 +28,16 @@ protected:
 TEST_F(ScanVerticesTest, Base) {
     {
         cpp2::ExecutionResponse resp;
+        auto code = client_->execute("SCAN VERTEX player LIMIT 1", resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        std::vector<std::string> expectedColNames{
+            {"VertexID"}, {"name"}, {"age"}, {"__version__"}, {"__ts__"}
+        };
+        ASSERT_TRUE(verifyColNames(resp, expectedColNames));
+    }
+    {
+        cpp2::ExecutionResponse resp;
         auto code = client_->execute("SCAN VERTEX player PART 1 LIMIT 1", resp);
         ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
 
@@ -35,6 +45,22 @@ TEST_F(ScanVerticesTest, Base) {
             {"VertexID"}, {"name"}, {"age"}, {"__version__"}, {"__ts__"}
         };
         ASSERT_TRUE(verifyColNames(resp, expectedColNames));
+    }
+    {
+        cpp2::ExecutionResponse resp;
+        auto code = client_->execute("SCAN VERTEX player FROM 0 LIMIT 1", resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        std::vector<std::string> expectedColNames{
+            {"VertexID"}, {"name"}, {"age"}, {"__version__"}, {"__ts__"}
+        };
+        ASSERT_TRUE(verifyColNames(resp, expectedColNames));
+    }
+    {
+        cpp2::ExecutionResponse resp;
+        auto code = client_->execute(
+            "yield rand64(0, 1) as p | scan vertex player part ($-.p + 1) from (rand64() / 1 * 1 + $-.p) limit 10", resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
     }
 }
 

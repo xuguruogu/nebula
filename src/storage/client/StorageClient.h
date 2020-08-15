@@ -211,10 +211,11 @@ public:
             int64_t end_time,
             folly::EventBase *evb = nullptr);
 
-protected:
+public:
     // Calculate the partition id for the given vertex id
     StatusOr<PartitionID> partId(GraphSpaceID spaceId, int64_t id) const;
 
+protected:
     const HostAddr leader(const PartMeta& partMeta) const {
         loadLeader();
         auto part = std::make_pair(partMeta.spaceId_, partMeta.partId_);
@@ -310,11 +311,13 @@ protected:
         return clusters;
     }
 
+public:
     virtual StatusOr<int32_t> partsNum(GraphSpaceID spaceId) const {
         CHECK(client_ != nullptr);
         return client_->partsNum(spaceId);
     }
 
+protected:
     virtual StatusOr<PartMeta> getPartMeta(GraphSpaceID spaceId, PartitionID partId) const {
         CHECK(client_ != nullptr);
         return client_->getPartMetaFromCache(spaceId, partId);

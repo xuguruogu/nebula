@@ -846,7 +846,8 @@ lookup_sentence
     ;
 
 scan_part_clause
-    : KW_PART expression { $$ = $2; }
+    : %empty { $$ = nullptr; }
+    | KW_PART expression { $$ = $2; }
     ;
 
 scan_from_clause

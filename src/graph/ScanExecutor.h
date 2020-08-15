@@ -26,12 +26,16 @@ public:
     void setupResponse(cpp2::ExecutionResponse &resp) override;
 
 private:
+    Status MUST_USE_RESULT setup();
+
+private:
     StatusOr<std::unique_ptr<InterimResult>> setupInterimResult();
 
     ScanSentence *sentence_{nullptr};
-
+    std::unique_ptr<ExpressionContext> expCtx_;
     PartitionID partition_;
     std::string cursor_;
+    folly::Optional<VertexID> vertexId_;
     int64_t startTime_;
     int64_t endTime_;
     int32_t limit_;

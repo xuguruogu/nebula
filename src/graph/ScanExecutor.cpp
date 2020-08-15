@@ -17,27 +17,14 @@ ScanExecutor::ScanExecutor(Sentence *sentence, ExecutionContext *ectx)
     sentence_ = static_cast<ScanSentence *>(sentence);
 }
 
-static Status _getInt(Expression* expr, int64_t &v) {
-    Getters getters;
-
-    auto status = expr->prepare();
-    if (!status.ok()) {
-        return status;
-    }
-    auto value = expr->eval(getters);
-    if (!value.ok()) {
-        return status;
-    }
-    auto r = value.value();
-    if (!Expression::isInt(r)) {
-        return Status::Error("should be of type integer");
-    }
-    v = Expression::asInt(r);
-
-    return Status::OK();
-}
-
 Status ScanExecutor::prepare() {
+    {
+        auto status = checkIfGraphSpaceChosen();
+        if (!status.ok()) {
+            return status;
+        }
+    }
+
     auto space = ectx()->rctx()->session()->space();
 
     auto tag = sentence_->tag();
@@ -50,63 +37,187 @@ Status ScanExecutor::prepare() {
     auto tagId = tagStatus.value();
     return_columns_[tagId] = {};
 
-    {
-        auto expr = sentence_->partition();
-        int64_t partitionId = 0;
-        auto status = _getInt(expr, partitionId);
-        if (!status.ok()) {
-            return status;
-        }
-        partition_ = partitionId;
+    if (expCtx_ == nullptr) {
+        expCtx_ = std::make_unique<ExpressionContext>();
     }
 
+    {
+        auto expr = sentence_->partition();
+        if (expr) {
+            expr->setContext(expCtx_.get());
+            auto status = expr->prepare();
+            if (!status.ok()) {
+                return status;
+            }
+        }
+    }
     {
         auto expr = sentence_->from();
         if (expr) {
-            VertexID vertexId = 0;
-            auto status = _getInt(expr, vertexId);
+            expr->setContext(expCtx_.get());
+            auto status = expr->prepare();
             if (!status.ok()) {
                 return status;
             }
-            cursor_ = NebulaKeyUtils::vertexPrefix(partition_, vertexId);
         }
     }
-
     {
         auto expr = sentence_->latestSeconds();
         if (expr) {
-            int64_t latestSeconds = 0;
-            auto status = _getInt(expr, latestSeconds);
+            expr->setContext(expCtx_.get());
+            auto status = expr->prepare();
             if (!status.ok()) {
                 return status;
             }
-            auto now = time::WallClock::fastNowInMicroSec();
-            startTime_ = now - latestSeconds * 1000000L;
-            endTime_ = now;
-        } else {
-            startTime_ = 0;
-            endTime_ = std::numeric_limits<int64_t>::max();
         }
     }
-
     {
         auto expr = sentence_->limit();
         if (expr) {
-            int64_t limit = 0;
-            auto status = _getInt(expr, limit);
+            expr->setContext(expCtx_.get());
+            auto status = expr->prepare();
             if (!status.ok()) {
                 return status;
             }
-            limit_ = limit;
-        } else {
-            limit_ = std::numeric_limits<int32_t>::max();
         }
     }
 
+    if (expCtx_->hasDstTagProp()
+        || expCtx_->hasEdgeProp()
+        || expCtx_->hasSrcTagProp()
+        || expCtx_->hasVariableProp()) {
+        return Status::Error("Unsupported expr.");
+    }
     return Status::OK();
 }
 
+Status ScanExecutor::setup() {
+    auto space = ectx()->rctx()->session()->space();
+    Getters getters;
+    auto func = [&] {
+        {
+            auto expr = sentence_->from();
+            if (expr) {
+                auto value = expr->eval(getters);
+                if (!value.ok()) {
+                    return value.status();
+                }
+                auto r = value.value();
+                if (!Expression::isInt(r)) {
+                    return Status::Error("should be of type integer");
+                }
+                vertexId_.assign(Expression::asInt(r));
+                cursor_ = NebulaKeyUtils::vertexPrefix(partition_, vertexId_.value());
+            }
+        }
+        {
+            auto expr = sentence_->latestSeconds();
+            if (expr) {
+                auto value = expr->eval(getters);
+                if (!value.ok()) {
+                    return value.status();
+                }
+                auto r = value.value();
+                if (!Expression::isInt(r)) {
+                    return Status::Error("should be of type integer");
+                }
+                int64_t latestSeconds = Expression::asInt(r);
+                auto now = time::WallClock::fastNowInMicroSec();
+                startTime_ = now - latestSeconds * 1000000L;
+                endTime_ = now;
+            } else {
+                startTime_ = 0;
+                endTime_ = std::numeric_limits<int64_t>::max();
+            }
+        }
+        {
+            auto expr = sentence_->limit();
+            if (expr) {
+                auto value = expr->eval(getters);
+                if (!value.ok()) {
+                    return value.status();
+                }
+                auto r = value.value();
+                if (!Expression::isInt(r)) {
+                    return Status::Error("should be of type integer");
+                }
+                limit_ = Expression::asInt(r);
+            } else {
+                limit_ = std::numeric_limits<int32_t>::max();
+            }
+        }
+        {
+            auto partnumStatus = ectx()->getStorageClient()->partsNum(space);
+            if (!partnumStatus.ok()) {
+                return partnumStatus.status();
+            }
+            auto partnum = partnumStatus.value();
+
+            auto expr = sentence_->partition();
+            if (expr) {
+                auto value = expr->eval(getters);
+                if (!value.ok()) {
+                    return value.status();
+                }
+                auto r = value.value();
+                if (!Expression::isInt(r)) {
+                    return Status::Error("should be of type integer");
+                }
+                partition_ = Expression::asInt(r);
+                if (partition_ > partnum) {
+                    return Status::Error("partition should not larger than space partitions.");
+                }
+            } else {
+                if (vertexId_.hasValue()) {
+                    auto partStatus = ectx()->getStorageClient()->partId(space, vertexId_.value());
+                    if (!partStatus.ok()) {
+                        return partStatus.status();
+                    }
+                    partition_ = partStatus.value();
+                } else {
+                    partition_ = 1;
+                }
+            }
+        }
+        return Status::OK();
+    };
+
+    if (expCtx_->hasInputProp()) {
+        if (inputs_ == nullptr) {
+            return Status::Error("input is empty.");
+        }
+
+        auto rows = inputs_->getRows();
+        if (!rows.ok()) {
+            return rows.status();
+        }
+        if (rows.value().size() != 1) {
+            return Status::Error("scan input rows size should be 1.");
+        }
+
+        auto visitor = [&] (const RowReader *reader) -> Status {
+            auto schema = reader->getSchema().get();
+            getters.getInputProp = [&] (const std::string &prop) -> OptVariantType {
+                return Collector::getProp(schema, prop, reader);
+            };
+            return func();
+        };
+        return inputs_->applyTo(visitor);
+    } else {
+        return func();
+    }
+}
+
 void ScanExecutor::execute() {
+    {
+        auto status = setup();
+        if (!status.ok()) {
+            LOG(ERROR) << "scan setup failed. " << status.toString();
+            doError(status);
+            return;
+        }
+    }
+
     auto space = ectx()->rctx()->session()->space();
 
     VLOG(1) << "ScanVertex: space:" << space << " partition: " << partition_
