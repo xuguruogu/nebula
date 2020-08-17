@@ -81,6 +81,10 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
         int64_t inValidCnt = 0;
         int64_t unknownCnt = 0;
 
+        TagID       lastTagID  = -1;
+        VertexID    lastVertexID = 0;
+        bool        firstLoop = true;
+
         for (; iter->valid() && rowCount < rowLimit_ && blockSize < FLAGS_max_scan_block_size;
                iter->next()) {
             auto key = iter->key();
@@ -104,29 +108,39 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
             if (!NebulaKeyUtils::isVertex(key)) {
                 continue;
             }
+
             TagID tagId = NebulaKeyUtils::getTagId(key);
+            VertexID vId = NebulaKeyUtils::getVertexId(key);
+            if (!firstLoop && tagId == lastTagID && vId == lastVertexID) {
+                VLOG(1) << "Only get the latest version for each edge.";
+                continue;
+            }
+            lastTagID = tagId;
+            lastVertexID = vId;
+            if (firstLoop) {
+                firstLoop = false;
+            }
 
             // only return data within time range [start, end)
             TagVersion version = NebulaKeyUtils::getVersionBigEndian(key);
             int64_t ts = std::numeric_limits<int64_t>::max() - version;
             if (ts < startTime_ || ts >= endTime_) {
                 VLOG(1) << "ts pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
-                        << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
+                        << " " << vId << " #" << version;
                 continue;
             }
 
             auto ctxIter = tagContexts_.find(tagId);
             if (ctxIter == tagContexts_.end()) {
                 VLOG(1) << "tag pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
-                        << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
+                        << " " << vId << " #" << version;
                 continue;
             }
 
             matchCnt++;
             VLOG(1) << "@" << NebulaKeyUtils::getPart(key) << "/" << tagId
-                    << " " << NebulaKeyUtils::getVertexId(key) << " #" << version;
+                    << " " << vId << " #" << version;
 
-            VertexID vId = NebulaKeyUtils::getVertexId(key);
             cpp2::ScanVertex data;
             data.set_vertexId(vId);
             data.set_tagId(tagId);
