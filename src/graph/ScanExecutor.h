@@ -33,9 +33,9 @@ private:
 
     ScanSentence *sentence_{nullptr};
     std::unique_ptr<ExpressionContext> expCtx_;
-    PartitionID partition_;
+    std::vector<PartitionID> partitions_;
     std::string cursor_;
-    folly::Optional<VertexID> vertexId_;
+    folly::Optional<PartitionID> vertexPartition_;
     int64_t startTime_;
     int64_t endTime_;
     int32_t limit_;

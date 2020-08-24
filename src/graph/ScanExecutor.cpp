@@ -42,12 +42,14 @@ Status ScanExecutor::prepare() {
     }
 
     {
-        auto expr = sentence_->partition();
-        if (expr) {
-            expr->setContext(expCtx_.get());
-            auto status = expr->prepare();
-            if (!status.ok()) {
-                return status;
+        ValueList* list = sentence_->partitions();
+        if (list) {
+            for (auto& expr : list->values()) {
+                expr->setContext(expCtx_.get());
+                auto status = expr->prepare();
+                if (!status.ok()) {
+                    return status;
+                }
             }
         }
     }
@@ -106,8 +108,15 @@ Status ScanExecutor::setup() {
                 if (!Expression::isInt(r)) {
                     return Status::Error("should be of type integer");
                 }
-                vertexId_.assign(Expression::asInt(r));
-                cursor_ = NebulaKeyUtils::vertexPrefix(partition_, vertexId_.value());
+                auto vid = Expression::asInt(r);
+                auto partStatus = ectx()->getStorageClient()->partId(space, vid);
+                if (!partStatus.ok()) {
+                    return partStatus.status();
+                }
+                auto partition = partStatus.value();
+                cursor_ = NebulaKeyUtils::vertexPrefix(partition, vid);
+                vertexPartition_ = partition;
+                partitions_.emplace_back(partition);
             }
         }
         {
@@ -153,29 +162,35 @@ Status ScanExecutor::setup() {
             }
             auto partnum = partnumStatus.value();
 
-            auto expr = sentence_->partition();
-            if (expr) {
-                auto value = expr->eval(getters);
-                if (!value.ok()) {
-                    return value.status();
-                }
-                auto r = value.value();
-                if (!Expression::isInt(r)) {
-                    return Status::Error("should be of type integer");
-                }
-                partition_ = Expression::asInt(r);
-                if (partition_ > partnum) {
-                    return Status::Error("partition should not larger than space partitions.");
-                }
-            } else {
-                if (vertexId_.hasValue()) {
-                    auto partStatus = ectx()->getStorageClient()->partId(space, vertexId_.value());
-                    if (!partStatus.ok()) {
-                        return partStatus.status();
+            ValueList* list = sentence_->partitions();
+            if (list) {
+                for (auto& expr : list->values()) {
+                    auto value = expr->eval(getters);
+                    if (!value.ok()) {
+                        return value.status();
                     }
-                    partition_ = partStatus.value();
-                } else {
-                    partition_ = 1;
+                    auto r = value.value();
+                    if (!Expression::isInt(r)) {
+                        return Status::Error(
+                            "should be of type integer");
+                    }
+                    auto partition = Expression::asInt(r);
+                    if (partition > partnum) {
+                        return Status::Error(
+                            "partition should not larger than space partitions.");
+                    }
+                    if (vertexPartition_) {
+                        if (vertexPartition_ != partition) {
+                            return Status::Error(
+                                "part [partition] not match from [vertex id's partition].");
+                        }
+                    } else {
+                        partitions_.emplace_back(partition);
+                    }
+                }
+            } else if (partitions_.empty()) {
+                for (PartitionID partition = 1; partition <= partnum; partition++) {
+                    partitions_.emplace_back(partition);
                 }
             }
         }
@@ -220,37 +235,52 @@ void ScanExecutor::execute() {
 
     auto space = ectx()->rctx()->session()->space();
 
-    VLOG(1) << "ScanVertex: space:" << space << " partition: " << partition_
+    VLOG(1) << "ScanVertex: space:" << space << " partitions: " << folly::join(",", partitions_)
             << " startTime: " << startTime_ << " endTime: " << endTime_ << " limit: " << limit_ ;
 
-    auto future = ectx()->getStorageClient()->ScanVertex(
-        space, partition_, cursor_, return_columns_, true, limit_, startTime_, endTime_);
+    std::vector<folly::SemiFuture<StatusOr<storage::cpp2::ScanVertexResponse>>> results;
+    results.reserve(partitions_.size());
+    for (auto partition : partitions_) {
+        auto future = ectx()->getStorageClient()->ScanVertex(
+            space, partition, cursor_, return_columns_, true, limit_, startTime_, endTime_);
+        results.emplace_back(std::move(future));
+    }
 
     auto *runner = ectx()->rctx()->runner();
-    auto cb = [this](StatusOr<storage::cpp2::ScanVertexResponse> &&resultStatus) {
-        if (!resultStatus.ok()) {
-            LOG(ERROR) << "ScanVertex error " << resultStatus.status().toString();
-            doError(resultStatus.status());
-            return;
-        }
-        auto result = std::move(resultStatus).value();
-        if (!result.get_result().get_failed_codes().empty()) {
-            for (auto &error : result.get_result().failed_codes) {
-                LOG(INFO) << "ScanVertex failed, part: " << error.get_part_id()
-                          << " error code: " << static_cast<int>(error.get_code());
+    auto cb = [this] (std::vector<folly::Try<StatusOr<storage::cpp2::ScanVertexResponse>>>&& t) {
+        std::shared_ptr<ResultSchemaProvider> schema;
+        {
+            size_t num = 0;
+            for (folly::Try<StatusOr<storage::cpp2::ScanVertexResponse>>& partitionTry : t) {
+                CHECK(!partitionTry.hasException());
+                StatusOr<storage::cpp2::ScanVertexResponse>& resultStatus = partitionTry.value();
+                if (!resultStatus.ok()) {
+                    LOG(ERROR) << "ScanVertex error " << resultStatus.status().toString();
+                    doError(resultStatus.status());
+                    return;
+                }
+                auto& result = resultStatus.value();
+                if (!result.get_result().get_failed_codes().empty()) {
+                    for (auto &error : result.get_result().failed_codes) {
+                        LOG(INFO) << "ScanVertex failed, part: " << error.get_part_id()
+                                  << " error code: " << static_cast<int>(error.get_code());
+                    }
+                    doError(Status::Error("ScanVertex failed."));
+                    return;
+                }
+                if (result.get_vertex_schema().size() != 1) {
+                    LOG(ERROR) << "ScanVertex return vertex_schema size != 1.";
+                    doError(Status::Error("ScanVertex return vertex_schema size != 1."));
+                    return;
+                }
+                schema = std::make_shared<ResultSchemaProvider>(
+                    result.get_vertex_schema().begin()->second);
+                num += result.get_vertex_data().size();
             }
-            doError(Status::Error("ScanVertex failed."));
-            return;
+            rows_.reserve(num);
         }
 
-        if (result.get_vertex_schema().size() != 1) {
-            LOG(ERROR) << "ScanVertex return vertex_schema size != 1.";
-            doError(Status::Error("ScanVertex return vertex_schema size != 1."));
-            return;
-        }
         colNames_.emplace_back("VertexID");
-        auto schema = std::make_shared<ResultSchemaProvider>(
-            result.get_vertex_schema().begin()->second);
         schema_ = std::make_shared<SchemaWriter>();
         schema_->appendCol("VertexID", nebula::cpp2::SupportedType::VID);
         for (auto& iter : *schema) {
@@ -262,128 +292,132 @@ void ScanExecutor::execute() {
         colNames_.emplace_back("__ts__");
         schema_->appendCol("__ts__", nebula::cpp2::SupportedType::TIMESTAMP);
 
-        rows_.reserve(result.get_vertex_data().size());
-        for (auto& data : result.get_vertex_data()) {
-            cpp2::RowValue row;
-            row.columns.reserve(colNames_.size());
+        for (folly::Try<StatusOr<storage::cpp2::ScanVertexResponse>>& partitionTry : t) {
+            StatusOr<storage::cpp2::ScanVertexResponse>& resultStatus = partitionTry.value();
+            auto& result = resultStatus.value();
+            for (auto& data : result.get_vertex_data()) {
+                cpp2::RowValue row;
+                row.columns.reserve(colNames_.size());
 
-            cpp2::ColumnValue vid;
-            vid.set_id(data.get_vertexId());
-            row.columns.emplace_back(vid);
+                cpp2::ColumnValue vid;
+                vid.set_id(data.get_vertexId());
+                row.columns.emplace_back(vid);
 
-            auto reader = RowReader::getRowReader(data.get_value(), schema);
-            for (unsigned i = 0; i < schema->getNumFields(); i++) {
-                cpp2::ColumnValue col;
-                switch (schema->getFieldType(i).get_type()) {
-                    case nebula::cpp2::SupportedType::BOOL:
-                    {
-                        bool v;
-                        auto ret = reader->getBool(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
+                auto reader = RowReader::getRowReader(data.get_value(), schema);
+                for (unsigned i = 0; i < schema->getNumFields(); i++) {
+                    cpp2::ColumnValue col;
+                    switch (schema->getFieldType(i).get_type()) {
+                        case nebula::cpp2::SupportedType::BOOL:
+                        {
+                            bool v;
+                            auto ret = reader->getBool(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_bool_val(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::INT:
+                        {
+                            long v;
+                            auto ret = reader->getInt(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_integer(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::TIMESTAMP:
+                        {
+                            long v;
+                            auto ret = reader->getInt(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_timestamp(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::VID:
+                        {
+                            VertexID v;
+                            auto ret = reader->getVid(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_id(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::FLOAT:
+                        {
+                            float v;
+                            auto ret = reader->getFloat(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_single_precision(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::DOUBLE:
+                        {
+                            double v;
+                            auto ret = reader->getDouble(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_double_precision(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::STRING:
+                        {
+                            folly::StringPiece v;
+                            auto ret = reader->getString(i, v);
+                            if (ret != ResultType::SUCCEEDED) {
+                                LOG(ERROR) << "ScanVertex return unsupported type.";
+                                doError(Status::Error("ScanVertex return unsupported type."));
+                                return;
+                            }
+                            col.set_str(v);
+                        }
+                            break;
+                        case nebula::cpp2::SupportedType::YEAR:
+                        case nebula::cpp2::SupportedType::YEARMONTH:
+                        case nebula::cpp2::SupportedType::DATE:
+                        case nebula::cpp2::SupportedType::DATETIME:
+                        case nebula::cpp2::SupportedType::PATH:
+                        case nebula::cpp2::SupportedType::UNKNOWN:
                             LOG(ERROR) << "ScanVertex return unsupported type.";
                             doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_bool_val(v);
+                            break;
                     }
-                        break;
-                    case nebula::cpp2::SupportedType::INT:
-                    {
-                        long v;
-                        auto ret = reader->getInt(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_integer(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::TIMESTAMP:
-                    {
-                        long v;
-                        auto ret = reader->getInt(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_timestamp(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::VID:
-                    {
-                        VertexID v;
-                        auto ret = reader->getVid(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_id(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::FLOAT:
-                    {
-                        float v;
-                        auto ret = reader->getFloat(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_single_precision(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::DOUBLE:
-                    {
-                        double v;
-                        auto ret = reader->getDouble(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_double_precision(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::STRING:
-                    {
-                        folly::StringPiece v;
-                        auto ret = reader->getString(i, v);
-                        if (ret != ResultType::SUCCEEDED) {
-                            LOG(ERROR) << "ScanVertex return unsupported type.";
-                            doError(Status::Error("ScanVertex return unsupported type."));
-                            return;
-                        }
-                        col.set_str(v);
-                    }
-                        break;
-                    case nebula::cpp2::SupportedType::YEAR:
-                    case nebula::cpp2::SupportedType::YEARMONTH:
-                    case nebula::cpp2::SupportedType::DATE:
-                    case nebula::cpp2::SupportedType::DATETIME:
-                    case nebula::cpp2::SupportedType::PATH:
-                    case nebula::cpp2::SupportedType::UNKNOWN:
-                        LOG(ERROR) << "ScanVertex return unsupported type.";
-                        doError(Status::Error("ScanVertex return unsupported type."));
-                        break;
+                    row.columns.emplace_back(col);
                 }
-                row.columns.emplace_back(col);
+                int64_t version = data.get_version();
+                {
+                    cpp2::ColumnValue col;
+                    col.set_integer(version);
+                    row.columns.emplace_back(col);
+                }
+                {
+                    cpp2::ColumnValue col;
+                    col.set_timestamp((std::numeric_limits<int64_t>::max() - version) / 1000000);
+                    row.columns.emplace_back(col);
+                }
+                rows_.emplace_back(std::move(row));
             }
-            int64_t version = data.get_version();
-            {
-                cpp2::ColumnValue col;
-                col.set_integer(version);
-                row.columns.emplace_back(col);
-            }
-            {
-                cpp2::ColumnValue col;
-                col.set_timestamp((std::numeric_limits<int64_t>::max() - version) / 1000000);
-                row.columns.emplace_back(col);
-            }
-            rows_.emplace_back(std::move(row));
         }
+
         if (onResult_) {
             auto status = setupInterimResult();
             if (!status.ok()) {
@@ -400,7 +434,8 @@ void ScanExecutor::execute() {
         LOG(ERROR) << "Exception when handle scan: " << e.what();
         doError(Status::Error("Exeception when handle scan: %s.", e.what().c_str()));
     };
-    std::move(future).via(runner).thenValue(cb).thenError(error);
+
+    folly::collectAll(results).via(runner).thenValue(cb).thenError(error);
 }
 
 StatusOr<std::unique_ptr<InterimResult>> ScanExecutor::setupInterimResult() {

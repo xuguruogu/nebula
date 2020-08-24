@@ -244,7 +244,8 @@ static constexpr size_t MAX_ABS_INTEGER = 9223372036854775808ULL;
 %type <sentence> traverse_sentence
 %type <sentence> go_sentence match_sentence lookup_sentence find_path_sentence
 %type <sentence> scan_sentence
-%type <expr> scan_part_clause scan_from_clause scan_latest_seconds_clause scan_limit_clause
+%type <value_list> scan_part_clause
+%type <expr> scan_from_clause scan_latest_seconds_clause scan_limit_clause
 %type <sentence> sample_sentence
 %type <sentence> group_by_sentence order_by_sentence limit_sentence
 %type <sentence> fetch_sentence fetch_vertices_sentence fetch_edges_sentence
@@ -850,7 +851,7 @@ lookup_sentence
 
 scan_part_clause
     : %empty { $$ = nullptr; }
-    | KW_PART expression { $$ = $2; }
+    | KW_PART value_list { $$ = $2; }
     ;
 
 scan_from_clause

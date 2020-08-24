@@ -121,10 +121,10 @@ private:
 class ScanSentence final : public Sentence {
 public:
     ScanSentence(std::string* tag,
-                 Expression* partition, Expression* from,
+                 ValueList* partitions, Expression* from,
                  Expression* latestSeconds, Expression* limit) {
         tag_.reset(tag);
-        partition_.reset(partition);
+        partitions_.reset(partitions);
         from_.reset(from);
         latestSeconds_.reset(latestSeconds);
         limit_.reset(limit);
@@ -135,8 +135,8 @@ public:
         return *tag_;
     }
 
-    Expression* partition() const {
-        return partition_.get();
+    ValueList* partitions() const {
+        return partitions_.get();
     }
 
     Expression* from() const {
@@ -156,7 +156,7 @@ public:
 
 private:
     std::unique_ptr<std::string> tag_;
-    std::unique_ptr<Expression> partition_;
+    std::unique_ptr<ValueList> partitions_;
     std::unique_ptr<Expression> from_;
     std::unique_ptr<Expression> latestSeconds_;
     std::unique_ptr<Expression> limit_;
