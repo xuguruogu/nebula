@@ -2412,7 +2412,7 @@ TEST_P(GoTest, IN) {
         cpp2::ExecutionResponse resp;
         auto &player = players_["Boris Diaw"];
         auto *fmt = "GO FROM %ld OVER serve "
-                    "WHERE serve.start_year IN range(-500, 2004) "
+                    "WHERE serve.start_year IN range(-500000, 2004) "
                     "YIELD $^.player.name, serve.start_year, serve.end_year, $$.team.name";
         auto query = folly::stringPrintf(fmt, player.vid());
         auto code = client_->execute(query, resp);

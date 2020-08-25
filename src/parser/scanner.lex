@@ -15,7 +15,7 @@
 
 using TokenType = nebula::GraphParser::token;
 
-static constexpr size_t MAX_STRING = 4096;
+static constexpr size_t MAX_STRING = std::numeric_limits<int32_t>::max();
 
 %}
 
@@ -511,11 +511,25 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 \'                          { BEGIN(SQ_STR); sbufPos_ = 0; }
 <DQ_STR>\"                  {
                                 yylval->strval = new std::string(sbuf(), sbufPos_);
+                                if (yylval->strval->size() > MAX_STRING) {
+                                    auto error = "Out of range of the STR length, "
+                                                  "the max length of STR is " +
+                                                  std::to_string(MAX_STRING) + ":";
+                                    delete yylval->strval;
+                                    throw GraphParser::syntax_error(*yylloc, error);
+                                }
                                 BEGIN(INITIAL);
                                 return TokenType::STRING;
                             }
 <SQ_STR>\'                  {
                                 yylval->strval = new std::string(sbuf(), sbufPos_);
+                                if (yylval->strval->size() > MAX_STRING) {
+                                    auto error = "Out of range of the STR length, "
+                                                  "the max length of STR is " +
+                                                  std::to_string(MAX_STRING) + ":";
+                                    delete yylval->strval;
+                                    throw GraphParser::syntax_error(*yylloc, error);
+                                }
                                 BEGIN(INITIAL);
                                 return TokenType::STRING;
                             }
