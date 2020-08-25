@@ -12,6 +12,7 @@
 #include "dataman/RowReader.h"
 #include "dataman/RowWriter.h"
 #include "meta/NebulaSchemaProvider.h"
+#include "storage/StorageFlags.h"
 
 
 DECLARE_int64(max_scan_block_size);
@@ -120,11 +121,10 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
             if (firstLoop) {
                 firstLoop = false;
             }
-
             // only return data within time range [start, end)
             TagVersion version = NebulaKeyUtils::getVersionBigEndian(key);
             int64_t ts = std::numeric_limits<int64_t>::max() - version;
-            if (ts < startTime_ || ts >= endTime_) {
+            if (FLAGS_enable_multi_versions && (ts < startTime_ || ts >= endTime_)) {
                 VLOG(1) << "ts pass @" << NebulaKeyUtils::getPart(key) << "/" << tagId
                         << " " << vId << " #" << version;
                 continue;
