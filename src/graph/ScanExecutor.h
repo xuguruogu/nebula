@@ -26,6 +26,8 @@ public:
     void setupResponse(cpp2::ExecutionResponse &resp) override;
 
 private:
+    Status MUST_USE_RESULT prepareClauses();
+
     Status MUST_USE_RESULT setup();
 
 private:

@@ -18,13 +18,16 @@ ScanExecutor::ScanExecutor(Sentence *sentence, ExecutionContext *ectx)
 }
 
 Status ScanExecutor::prepare() {
+    return Status::OK();
+}
+
+Status ScanExecutor::prepareClauses() {
     {
         auto status = checkIfGraphSpaceChosen();
         if (!status.ok()) {
             return status;
         }
     }
-
     auto space = ectx()->rctx()->session()->space();
 
     auto tag = sentence_->tag();
@@ -225,7 +228,13 @@ Status ScanExecutor::setup() {
 
 void ScanExecutor::execute() {
     {
-        auto status = setup();
+        auto status = prepareClauses();
+        if (!status.ok()) {
+            LOG(ERROR) << "prepareClauses failed. " << status.toString();
+            doError(status);
+            return;
+        }
+        status = setup();
         if (!status.ok()) {
             LOG(ERROR) << "scan setup failed. " << status.toString();
             doError(status);
