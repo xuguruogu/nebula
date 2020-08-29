@@ -176,6 +176,18 @@ public:
 
     void setOverAllEdge() { overAll_ = true; }
 
+    void setOnVariableVariantGet(
+        std::function<OptVariantType(const std::string&)> func) {
+        onVariableVariantGet_ = std::move(func);
+    }
+
+    OptVariantType getVariableVariant(const std::string& var) const {
+        if (onVariableVariantGet_ == nullptr) {
+            return Status::Error(
+                "`onVariableVariantGet_' function is not implemented");
+        }
+        return onVariableVariantGet_(var);
+    }
 private:
     std::unordered_set<PropPair>              srcTagProps_;
     std::unordered_set<PropPair>              dstTagProps_;
@@ -190,6 +202,7 @@ private:
     bool                                      overAll_{false};
     GraphSpaceID                              space_;
     nebula::storage::StorageClient            *storageClient_{nullptr};
+    std::function<OptVariantType(const std::string&)> onVariableVariantGet_;
 };
 
 
@@ -404,6 +417,7 @@ public:
         kDestProp,
         kInputProp,
         kUUID,
+        kVariableVariant,
         kMax,
     };
 
@@ -428,6 +442,8 @@ protected:
 
     static std::unique_ptr<Expression> makeExpr(uint8_t kind);
 
+    bool encodeCache(ICord<> &cord) const;
+
 private:
     // Make friend to derived classes,
     // to allow them to call private encode/decode on each other.
@@ -446,6 +462,7 @@ private:
     friend class EdgeTypeExpression;
     friend class VariablePropertyExpression;
     friend class InputPropertyExpression;
+    friend class VariableVariantExpression;
 
     virtual void encode(ICord<> &cord) const = 0;
     /*
@@ -552,6 +569,30 @@ public:
     Status traversal(std::function<void(const Expression*)> visitor) const override;
 
     Status MUST_USE_RESULT prepare() override;
+};
+
+class VariableVariantExpression final : public Expression {
+public:
+    VariableVariantExpression() {
+        kind_ = kVariableVariant;
+    }
+
+    VariableVariantExpression(std::string *var);
+
+    std::string toString() const override;
+
+    OptVariantType eval(Getters &getters) const override;
+
+    Status traversal(std::function<void(const Expression*)> visitor) const override;
+
+    Status MUST_USE_RESULT prepare() override;
+
+private:
+    void encode(ICord<> &cord) const override;
+    const char* decode(const char *pos, const char *end) override;
+
+protected:
+    std::unique_ptr<std::string>    var_;
 };
 
 

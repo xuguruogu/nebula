@@ -603,6 +603,8 @@ bool QueryBoundSampleProcessor::checkExp(const Expression* exp) {
         case Expression::kDestProp:
         case Expression::kInputProp:
             return true;
+        case Expression::kVariableVariant:
+            return false;
         default: {
             VLOG(1) << "Unsupport expression type! kind = "
                     << std::to_string(static_cast<uint8_t>(exp->kind()));

@@ -29,6 +29,10 @@ Status ScanExecutor::prepareClauses() {
         }
     }
     auto space = ectx()->rctx()->session()->space();
+    expCtx_ = std::make_unique<ExpressionContext>();
+    expCtx_->setSpace(space);
+    expCtx_->setStorageClient(ectx()->getStorageClient());
+    expCtx_->setOnVariableVariantGet(onVariableVariantGet_);
 
     auto tag = sentence_->tag();
 
@@ -39,10 +43,6 @@ Status ScanExecutor::prepareClauses() {
     }
     auto tagId = tagStatus.value();
     return_columns_[tagId] = {};
-
-    if (expCtx_ == nullptr) {
-        expCtx_ = std::make_unique<ExpressionContext>();
-    }
 
     {
         ValueList* list = sentence_->partitions();
