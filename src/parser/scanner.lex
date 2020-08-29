@@ -169,6 +169,7 @@ ACCOUNT                     ([Aa][Cc][Cc][Oo][Uu][Nn][Tt])
 DBA                         ([Dd][Bb][Aa])
 CONTAINS                    ([Cc][Oo][Nn][Tt][Aa][Ii][Nn][Ss])
 SAMPLE                      ([Ss][Aa][Mm][Pp][Ll][Ee])
+GLOBAL                      ([Gg][Ll][Oo][Bb][Aa][Ll])
 
 LABEL                       ([_a-zA-Z][_a-zA-Z0-9]*)
 LABEL_SPECIFIC              ([$-^._a-zA-Z0-9]+)
@@ -268,6 +269,7 @@ RECOVER                     ([Rr][Ee][Cc][Oo][Vv][Ee][Rr])
 {NULL}                      { return TokenType::KW_NULL; }
 {RECOVER}                   { return TokenType::KW_RECOVER; }
 {SAMPLE}                    { return TokenType::KW_SAMPLE; }
+{GLOBAL}                    { return TokenType::KW_GLOBAL; }
 
 
  /* Unreserved keyword */

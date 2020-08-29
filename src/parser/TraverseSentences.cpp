@@ -139,6 +139,9 @@ std::string PipedSentence::toString() const {
 std::string AssignmentSentence::toString() const {
     std::string buf;
     buf.reserve(256);
+    if (global_) {
+        buf += "GLOBAL ";
+    }
     buf += "$";
     buf += *variable_;
     buf += " = ";
