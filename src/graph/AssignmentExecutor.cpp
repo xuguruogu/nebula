@@ -50,11 +50,6 @@ Status AssignmentExecutor::prepare() {
 
 
 void AssignmentExecutor::execute() {
-    auto status = checkIfGraphSpaceChosen();
-    if (!status.ok()) {
-        doError(std::move(status));
-        return;
-    }
     executor_->execute();
 }
 
