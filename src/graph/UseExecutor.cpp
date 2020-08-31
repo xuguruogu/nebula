@@ -7,6 +7,8 @@
 #include "base/Base.h"
 #include "graph/UseExecutor.h"
 
+DEFINE_bool(use_executor_access_cache, false, "use sentence cache.");
+
 namespace nebula {
 namespace graph {
 
@@ -20,8 +22,7 @@ Status UseExecutor::prepare() {
     return Status::OK();
 }
 
-
-void UseExecutor::execute() {
+void UseExecutor::executeRemote() {
     auto future = ectx()->getMetaClient()->getSpace(*sentence_->space());
     auto *runner = ectx()->rctx()->runner();
 
@@ -46,7 +47,7 @@ void UseExecutor::execute() {
         ectx()->rctx()->session()->setSpace(*sentence_->space(), spaceId);
 
         FVLOG1("Graph space switched to `%s', space id: %d",
-                   sentence_->space()->c_str(), spaceId);
+               sentence_->space()->c_str(), spaceId);
 
         doFinish(Executor::ProcessControl::kNext);
     };
@@ -58,6 +59,35 @@ void UseExecutor::execute() {
     };
 
     std::move(future).via(runner).thenValue(cb).thenError(error);
+}
+
+void UseExecutor::execute() {
+    if (!FLAGS_use_executor_access_cache) {
+        return executeRemote();
+    }
+
+    auto status = ectx()->schemaManager()->toGraphSpaceID(*sentence_->space());
+    if (!status.ok()) {
+        return executeRemote();
+    }
+
+    auto spaceId = std::move(status).value();
+    /**
+    * Permission check.
+    */
+    auto *session = ectx()->rctx()->session();
+    auto rst = permission::PermissionManager::canReadSpace(session, spaceId);
+    if (!rst) {
+        doError(Status::PermissionError("Permission denied"));
+        return;
+    }
+
+    ectx()->rctx()->session()->setSpace(*sentence_->space(), spaceId);
+
+    FVLOG1("Graph space switched to `%s', space id: %d",
+           sentence_->space()->c_str(), spaceId);
+
+    doFinish(Executor::ProcessControl::kNext);
 }
 
 }   // namespace graph

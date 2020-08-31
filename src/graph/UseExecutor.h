@@ -28,6 +28,9 @@ public:
     void execute() override;
 
 private:
+    void executeRemote();
+
+private:
     UseSentence                                *sentence_{nullptr};
 };
 
