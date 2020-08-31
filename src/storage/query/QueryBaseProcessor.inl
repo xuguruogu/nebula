@@ -163,6 +163,10 @@ cpp2::ErrorCode QueryBaseProcessor<REQ, RESP>::checkAndBuildContexts(const REQ& 
         }
         expCtx_ = std::make_unique<ExpressionContext>();
         exp_->setContext(expCtx_.get());
+        auto status = exp_->prepare();
+        if (!status.ok()) {
+            return cpp2::ErrorCode::E_INVALID_FILTER;
+        }
     }
 
     buildTTLInfoAndRespSchemaAndMultiVersions();
