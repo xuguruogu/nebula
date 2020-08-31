@@ -45,6 +45,7 @@
 #include "meta/processors/usersMan/AuthenticationProcessor.h"
 #include "meta/processors/admin/BalanceProcessor.h"
 #include "meta/processors/admin/LeaderBalanceProcessor.h"
+#include "meta/processors/admin/Balancer.h"
 #include "meta/processors/admin/CreateSnapshotProcessor.h"
 #include "meta/processors/admin/DropSnapshotProcessor.h"
 #include "meta/processors/admin/ListSnapshotsProcessor.h"
@@ -61,6 +62,30 @@
 
 namespace nebula {
 namespace meta {
+
+void MetaServiceHandler::balanceFunc() {
+    size_t delayMS = 30 * 60 * 1000 + folly::Random::rand32(30 * 60 * 1000);
+    bgThread_->addDelayTask(delayMS, &MetaServiceHandler::balanceFunc, this);
+    Balancer::instance(kvstore_)->leaderBalance();
+}
+
+MetaServiceHandler::MetaServiceHandler(kvstore::KVStore* kv, ClusterID clusterId)
+    : kvstore_(kv), clusterId_(clusterId) {
+    adminClient_ = std::make_unique<AdminClient>(kvstore_);
+    heartBeatStat_ = stats::Stats("meta", "heartbeat");
+    bgThread_ = std::make_unique<thread::GenericWorker>();
+    CHECK(bgThread_->start());
+    size_t delayMS = 1 * 60 * 1000 + folly::Random::rand32(30 * 60 * 1000);
+    bgThread_->addDelayTask(delayMS, &MetaServiceHandler::balanceFunc, this);
+}
+
+MetaServiceHandler::~MetaServiceHandler() {
+    if (bgThread_ != nullptr) {
+        bgThread_->stop();
+        bgThread_->wait();
+        bgThread_.reset();
+    }
+}
 
 folly::Future<cpp2::ExecResp>
 MetaServiceHandler::future_createSpace(const cpp2::CreateSpaceReq& req) {
