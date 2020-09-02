@@ -10,7 +10,7 @@ add_library(
     SanitizerOptions.cpp
     SignalHandler.cpp
     SlowOpTracker.cpp
-    FlattenList.cpp)
+    FlattenList.cpp ../../graph/Whitelist.cpp ../../graph/Whitelist.h)
 
 IF(${PCHSupport_FOUND})
     add_precompiled_header(base_obj Base.h)

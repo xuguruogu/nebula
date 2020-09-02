@@ -8,6 +8,7 @@
 #include "graph/test/TestEnv.h"
 #include "graph/test/TestBase.h"
 #include "meta/test/TestUtils.h"
+#include "graph/Whitelist.h"
 
 DECLARE_int32(heartbeat_interval_secs);
 
@@ -74,6 +75,60 @@ TEST_F(PermissionTest, SimpleTest) {
 
         client->disconnect();
     }
+    sleep(FLAGS_heartbeat_interval_secs + 1);
+    FLAGS_whitelist = "127.0.0.1,127.0.0.3";
+    loadWhitelist();
+    {
+        auto client = gEnv->getClient();
+        ASSERT_NE(nullptr, client);
+        cpp2::ExecutionResponse resp;
+
+        std::string query = "DESC SPACE my_space;";
+        auto code = client->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        query = "CREATE USER sst WITH PASSWORD 'sst'";
+        code = client->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        query = "GRANT ROLE SST ON my_space to sst";
+        code = client->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        client->disconnect();
+    }
+    sleep(FLAGS_heartbeat_interval_secs + 1);
+    {
+        auto client = gEnv->getClient("sst", "sst");
+        ASSERT_NE(nullptr, client);
+        cpp2::ExecutionResponse resp;
+
+        std::string query = "DESC SPACE my_space;";
+        auto code = client->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        client->disconnect();
+    }
+    FLAGS_whitelist = "127.0.0.2,127.0.0.3";
+    loadWhitelist();
+    {
+        auto client = gEnv->getClient();
+        ASSERT_EQ(nullptr, client);
+    }
+    {
+        auto client = gEnv->getClient("sst", "sst");
+        ASSERT_NE(nullptr, client);
+        cpp2::ExecutionResponse resp;
+
+        std::string query = "DESC SPACE my_space;";
+        auto code = client->execute(query, resp);
+        ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
+
+        client->disconnect();
+    }
+    FLAGS_whitelist = "127.0.0.1";
+    loadWhitelist();
+
     /*
      * change root password, incorrect password.
      */

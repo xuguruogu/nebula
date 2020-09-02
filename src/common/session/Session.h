@@ -106,6 +106,15 @@ public:
         return false;
     }
 
+    bool isSstOnly() const {
+        for (auto &role : roles_) {
+            if (role.second != Role::SST) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void setRole(GraphSpaceID space, Role role) {
         roles_.emplace(space, role);
     }

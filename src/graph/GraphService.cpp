@@ -10,9 +10,11 @@
 #include "storage/client/StorageClient.h"
 #include "graph/GraphFlags.h"
 #include "common/encryption/MD5Utils.h"
+#include "graph/Whitelist.h"
 
 DECLARE_string(meta_server_addrs);
 DECLARE_bool(local_config);
+DECLARE_string(whitelist);
 
 namespace nebula {
 namespace graph {
@@ -22,6 +24,8 @@ Status GraphService::init(std::shared_ptr<folly::IOThreadPoolExecutor> ioExecuto
     if (!addrs.ok()) {
         return addrs.status();
     }
+
+    loadWhitelist();
 
     meta::MetaClientOptions options;
     options.serviceName_ = "graph";
@@ -58,10 +62,25 @@ folly::Future<cpp2::AuthResponse> GraphService::future_authenticate(
         onHandle(ctx, cpp2::ErrorCode::SUCCEEDED);
     } else if (auth(username, password)) {
         auto roles = metaClient_->getRolesByUserFromCache(username);
-        for (const auto& role : roles) {
-            ctx.session()->setRole(role.get_space_id(), toRole(role.get_role_type()));
+        if (checkWhitelist(peer->getIPAddress().asV4())) {
+            for (const auto& role : roles) {
+                ctx.session()->setRole(role.get_space_id(), toRole(role.get_role_type()));
+            }
+            onHandle(ctx, cpp2::ErrorCode::SUCCEEDED);
+        } else {
+            bool allow = false;
+            for (const auto& role : roles) {
+                if (role.get_role_type() == ::nebula::cpp2::RoleType::SST) {
+                    ctx.session()->setRole(role.get_space_id(), session::Role::SST);
+                    allow = true;
+                }
+            }
+            if (allow) {
+                onHandle(ctx, cpp2::ErrorCode::SUCCEEDED);
+            } else {
+                onHandle(ctx, cpp2::ErrorCode::E_BAD_PERMISSION);
+            }
         }
-        onHandle(ctx, cpp2::ErrorCode::SUCCEEDED);
     } else {
         onHandle(ctx, cpp2::ErrorCode::E_BAD_USERNAME_PASSWORD);
     }
