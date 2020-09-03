@@ -6,6 +6,7 @@
 
 #include "base/Base.h"
 #include "graph/FetchEdgesExecutor.h"
+#include "GraphFlags.h"
 
 namespace nebula {
 namespace graph {
@@ -324,6 +325,11 @@ void FetchEdgesExecutor::fetchEdges() {
                            << "error code: " << static_cast<int>(error.second);
             }
             ectx()->addWarningMsg("Fetch edges executor was partially performed");
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get edge `%s' props partially failed", labelName_->c_str()));
+                return;
+            }
+            ectx()->addWarningMsg("Get edge props was partially performed");
         }
         processResult(std::move(result));
         return;

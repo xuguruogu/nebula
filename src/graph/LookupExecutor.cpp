@@ -5,6 +5,7 @@
  */
 
 #include "graph/LookupExecutor.h"
+#include "GraphFlags.h"
 
 namespace nebula {
 namespace graph {
@@ -329,6 +330,10 @@ void LookupExecutor::lookUp() {
             for (auto &error : result.failedParts()) {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
+            }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Lookup partially failed"));
+                return;
             }
             ectx()->addWarningMsg("Lookup executor was partially performed");
         }

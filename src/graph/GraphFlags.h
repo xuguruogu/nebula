@@ -35,5 +35,6 @@ DECLARE_bool(enable_local_authorize);
 DECLARE_string(auth_type);
 
 DECLARE_string(cloud_http_url);
+DECLARE_bool(enable_partial_success);
 
 #endif  // GRAPH_GRAPHFLAGS_H_

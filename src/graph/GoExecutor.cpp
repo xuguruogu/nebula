@@ -11,6 +11,7 @@
 #include "dataman/RowSetReader.h"
 #include "dataman/ResultSchemaProvider.h"
 #include <boost/functional/hash.hpp>
+#include "GraphFlags.h"
 
 
 DEFINE_bool(filter_pushdown, true, "If pushdown the filter to storage.");
@@ -555,6 +556,10 @@ void GoExecutor::stepOut() {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
             }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get neighbors partially failed"));
+                return;
+            }
             warningMsg_ = "Go executor was partially performed";
         }
         if (FLAGS_trace_go) {
@@ -950,6 +955,10 @@ void GoExecutor::fetchVertexProps(std::vector<VertexID> ids) {
             for (auto &error : result.failedParts()) {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
+            }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get neighbors partially failed"));
+                return;
             }
             warningMsg_ = "Go executor was partially performed";
         }

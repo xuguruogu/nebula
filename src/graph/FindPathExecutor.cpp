@@ -6,6 +6,7 @@
 
 #include "base/Base.h"
 #include "FindPathExecutor.h"
+#include "GraphFlags.h"
 
 namespace nebula {
 namespace graph {
@@ -493,6 +494,11 @@ void FindPathExecutor::getFromFrontiers(
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
             }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get neighbors partially failed."));
+                return;
+            }
+            ectx()->addWarningMsg("Find path executor was partially performed");
         }
         auto status = doFilter(std::move(result), where_.filter_, true, frontiers);
         if (!status.ok()) {
@@ -530,6 +536,10 @@ void FindPathExecutor::getToFrontiers(
             for (auto &error : result.failedParts()) {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
+            }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get neighbors partially failed"));
+                return;
             }
             ectx()->addWarningMsg("Find path executor was partially performed");
         }

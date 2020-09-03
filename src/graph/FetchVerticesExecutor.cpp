@@ -8,6 +8,7 @@
 #include "graph/FetchVerticesExecutor.h"
 #include "meta/SchemaProviderIf.h"
 #include "dataman/SchemaWriter.h"
+#include "GraphFlags.h"
 
 namespace nebula {
 namespace graph {
@@ -340,6 +341,10 @@ void FetchVerticesExecutor::fetchVertices() {
             for (auto &error : result.failedParts()) {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
+            }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Get tag props partially failed"));
+                return;
             }
             ectx()->addWarningMsg("Fetch vertices executor was partially performed");
         }

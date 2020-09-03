@@ -12,6 +12,7 @@
 #include "dataman/RowSetReader.h"
 #include "dataman/ResultSchemaProvider.h"
 #include <boost/functional/hash.hpp>
+#include "GraphFlags.h"
 
 DEFINE_bool(trace_sample, false, "Whether to dump the detail trace log from one sample request");
 
@@ -122,11 +123,16 @@ void SampleExecutor::execute() {
             // performed, even in the case that this happened in the intermediate process.
             // Or, make this case configurable at runtime.
             // For now, we just do some logging and keep going.
-            LOG(INFO) << "Get neighbors partially failed: "  << completeness << "%";
+            LOG(INFO) << "Sample neighbors partially failed: "  << completeness << "%";
             for (auto &error : result.failedParts()) {
                 LOG(ERROR) << "part: " << error.first
                            << "error code: " << static_cast<int>(error.second);
             }
+            if (!FLAGS_enable_partial_success) {
+                doError(Status::Error("Sample neighbors partially failed"));
+                return;
+            }
+            ectx()->addWarningMsg("Sample neighbors was partially performed");
         }
         finishExecution (std::move(result));
     };

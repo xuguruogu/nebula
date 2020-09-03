@@ -40,3 +40,4 @@ DEFINE_string(auth_type, "password", "User login authentication type,"
                                      "cloud for cloud authentication");
 
 DEFINE_string(cloud_http_url, "", "cloud http url including ip, port, url path");
+DEFINE_bool(enable_partial_success, false, "enable partial success");
