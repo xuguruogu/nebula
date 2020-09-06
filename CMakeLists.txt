@@ -568,6 +568,7 @@ macro(nebula_link_libraries target)
         keyutils
         resolv
         dl
+        rt
         ${GETTIME_LIB}
         ${libatomic_link_flags}
         -pthread
