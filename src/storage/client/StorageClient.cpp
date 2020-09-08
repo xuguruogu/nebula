@@ -6,11 +6,367 @@
 
 #include "base/Base.h"
 #include "storage/client/StorageClient.h"
+#include "common/time/Duration.h"
+#include "common/utils/to_string.h"
 
 DEFINE_int32(storage_client_timeout_ms, 60 * 1000, "storage client timeout");
 
 namespace nebula {
 namespace storage {
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::AddVerticesRequest& req) {
+    return client.future_addVertices(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::AddEdgesRequest& req) {
+    return client.future_addEdges(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::GetNeighborsSampleRequest& req) {
+    return client.future_getBoundSample(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::VertexPropRequest& req) {
+    return client.future_getProps(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::EdgePropRequest& req) {
+    return client.future_getEdgeProps(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::GetNeighborsRequest& req) {
+    return client.future_getBound(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::DeleteEdgesRequest& req) {
+    return client.future_deleteEdges(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::DeleteVerticesRequest& req) {
+    return client.future_deleteVertices(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::PutRequest& req) {
+    return client.future_put(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::GetRequest& req) {
+    return client.future_get(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::LookUpIndexRequest& req) {
+    return client.future_lookUpIndex(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::UpdateVertexRequest& req) {
+    return client.future_updateVertex(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::UpdateEdgeRequest& req) {
+    return client.future_updateEdge(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::GetUUIDReq& req) {
+    return client.future_getUUID(req);
+}
+
+static auto
+processOne(storage::cpp2::StorageServiceAsyncClient& client, const cpp2::ScanVertexRequest& req) {
+    return client.future_scanVertex(req);
+}
+
+template <
+    class Request,
+    class Response = typename decltype(processOne(
+        *(storage::cpp2::StorageServiceAsyncClient*)(nullptr),
+        *(const Request*)(nullptr))
+    )::value_type
+>
+struct StorageReqsContext : public std::enable_shared_from_this<StorageReqsContext<Request, Response>> {
+public:
+    StorageReqsContext(
+        StorageClient& client,
+        std::unordered_map<HostAddr, Request> requests,
+        folly::EventBase* evb) :
+        client_(client),
+        requests_(std::move(requests)),
+        resp_(requests_.size()),
+        evb_(evb == nullptr ? client.ioThreadPool_->getEventBase() : evb) {
+    }
+
+    folly::SemiFuture<StorageRpcResponse<Response>> process(bool retry = false) {
+        std::vector<folly::Future<folly::Unit>> results;
+        for (auto& pair : requests_) {
+            const HostAddr& host = pair.first;
+            Request& req = pair.second;
+
+            results.emplace_back(folly::via(evb_, [this, &host, &req] () mutable {
+                return processOne(*getClient(host), req).via(evb_);
+            }).thenTry([this, &host, &req, retry] (folly::Try<Response>&& reqTry) {
+                if (reqTry.hasException()) {
+                    LOG(ERROR) << "Request to " << host << " failed: " << reqTry.exception().what();
+                    if (!retry) {
+                        for (auto& part : req.parts) {
+                            PartitionID partId = getPartId(part);
+                            resp_.failedParts().emplace(partId, storage::cpp2::ErrorCode::E_RPC_FAILURE);
+                            client_.invalidLeader(req.get_space_id(), partId);
+                        }
+                        resp_.markFailure();
+                    } else {
+                        requestsRetry_[host] = std::move(req);
+                    }
+                } else {
+                    auto resp = std::move(reqTry).value();
+                    auto& result = resp.get_result();
+                    for (auto& code : result.get_failed_codes()) {
+                        VLOG(3) << "Failure! Failed part " << code.get_part_id()
+                                << ", failed code " << static_cast<int32_t>(code.get_code());
+                        if (code.get_code() == storage::cpp2::ErrorCode::E_LEADER_CHANGED) {
+                            auto* leader = code.get_leader();
+                            if (leader != nullptr
+                                && leader->get_ip() != 0
+                                && leader->get_port() != 0) {
+                                client_.updateLeader(req.get_space_id(),
+                                                     code.get_part_id(),
+                                                     HostAddr(leader->get_ip(), leader->get_port()));
+                            } else {
+                                client_.invalidLeader(req.get_space_id(), code.get_part_id());
+                            }
+                        } else if (code.get_code() == storage::cpp2::ErrorCode::E_PART_NOT_FOUND
+                                   || code.get_code() == storage::cpp2::ErrorCode::E_SPACE_NOT_FOUND) {
+                            client_.invalidLeader(req.get_space_id(), code.get_part_id());
+                        } else {
+                            // Simply keep the result
+                            resp_.failedParts().emplace(code.get_part_id(), code.get_code());
+                        }
+                    }
+                    if (!result.get_failed_codes().empty()) {
+                        resp_.markFailure();
+                    }
+
+                    // Adjust the latency
+                    auto latency = result.get_latency_in_us();
+                    resp_.setLatency(host, latency, duration_.elapsedInUSec());
+                    // Keep the response
+                    resp_.responses().emplace_back(std::move(resp));
+                }
+            }));
+        }
+
+        return folly::collectAll(results).via(evb_).then([this, retry, s = this->shared_from_this()] (auto&& t) {
+            UNUSED(t);
+            if (retry && resp_.succeeded() && !requestsRetry_.empty()) {
+                requests_.clear();
+                std::unordered_set<HostAddr> blackList;
+                std::unordered_set<HostAddr> retryList;
+                std::unordered_set<PartitionID> partList;
+                for (auto& pair : requestsRetry_) {
+                    auto& host = pair.first;
+                    blackList.insert(host);
+                }
+
+                for (auto& pair : requestsRetry_) {
+                    auto& req = pair.second;
+                    auto spaceId = req.get_space_id();
+                    for (auto& part : req.parts) {
+                        PartitionID partId = getPartId(part);
+                        partList.insert(partId);
+                        auto metaStatus = client_.getPartMeta(spaceId, partId);
+                        if (!metaStatus.ok()) {
+                            LOG(ERROR) << metaStatus.status();
+                            return respond();
+                        }
+                        std::vector<HostAddr> peers = metaStatus.value().peers_;
+                        CHECK_GT(peers.size(), 0U);
+                        std::random_shuffle(peers.begin(), peers.end());
+                        bool find = false;
+                        for (auto& host : peers) {
+                            if (blackList.find(host) == blackList.end()) {
+                                auto iter = requests_.find(host);
+                                if (iter == requests_.end()) {
+                                    auto r = req;
+                                    r.parts.clear();
+                                    r.parts.insert(r.parts.end(), part);
+                                    requests_[host] = std::move(r);
+                                    retryList.insert(host);
+                                } else {
+                                    auto r = iter->second;
+                                    r.parts.insert(r.parts.end(), part);
+                                }
+                                find = true;
+                                break;
+                            }
+                        }
+                        if (!find) {
+                            return respond();
+                        }
+                    }
+                }
+                requestsRetry_.clear();
+                LOG(INFO) << "retry failed request, " << partList << "@hosts: " << blackList << " -> " << retryList;
+                return process(false);
+            }
+            return respond();
+        });
+    }
+
+    folly::SemiFuture<StorageRpcResponse<Response>> respond() {
+        for (auto& pair : requestsRetry_) {
+            Request& req = pair.second;
+            for (auto& part : req.parts) {
+                PartitionID partId = getPartId(part);
+                resp_.failedParts().emplace(partId, storage::cpp2::ErrorCode::E_RPC_FAILURE);
+                client_.invalidLeader(req.get_space_id(), partId);
+            }
+            resp_.markFailure();
+        }
+        return folly::makeSemiFuture(std::move(resp_));
+    }
+
+private:
+    template <typename T>
+    static PartitionID getPartId(const std::pair<const PartitionID, T>& p) {
+        return p.first;
+    }
+
+    static PartitionID getPartId(const PartitionID& p) {
+        return p;
+    }
+
+    std::shared_ptr<storage::cpp2::StorageServiceAsyncClient>
+    getClient(HostAddr host) {
+        return client_.clientsMan_->client(
+            host, evb_, false, FLAGS_storage_client_timeout_ms);
+    }
+private:
+    time::Duration duration_;
+    StorageClient& client_;
+    std::unordered_map<HostAddr, Request> requests_{};
+    std::unordered_map<HostAddr, Request> requestsRetry_{};
+    StorageRpcResponse<Response> resp_;
+    folly::EventBase* evb_{};
+};
+
+template <
+    class Request,
+    class Response = typename decltype(processOne(
+        *(storage::cpp2::StorageServiceAsyncClient*)(nullptr),
+        *(const Request*)(nullptr))
+    )::value_type
+>
+std::shared_ptr<StorageReqsContext<Request, Response>>
+makeStorageReqsContext(StorageClient& client,
+                      std::unordered_map<HostAddr, Request>&& requests,
+                      folly::EventBase* evb) {
+    return std::make_shared<StorageReqsContext<Request, Response>>(
+        client, std::forward<std::unordered_map<HostAddr, Request>>(requests), evb);
+}
+
+template <
+    class Request,
+    class Response = typename decltype(processOne(
+        *(storage::cpp2::StorageServiceAsyncClient*)(nullptr),
+        *(const Request*)(nullptr))
+    )::value_type
+>
+struct StorageReqContext : public std::enable_shared_from_this<StorageReqContext<Request, Response>> {
+public:
+    StorageReqContext(StorageClient& client, HostAddr host, Request req, folly::EventBase* evb) :
+        client_(client), host_(host), req_(std::move(req)),
+        evb_(evb == nullptr ? client.ioThreadPool_->getEventBase() : evb) {
+    }
+
+    folly::Future<StatusOr<Response>> process(bool retry = false) {
+        return folly::via(evb_, [this] () mutable {
+            return processOne(*getClient(host_), req_).via(evb_);
+        }).thenTry([this, retry, s = this->shared_from_this()] (folly::Try<Response>&& reqTry) {
+            auto spaceId = req_.get_space_id();
+            auto partId = req_.get_part_id();
+            if (reqTry.hasException()) {
+                LOG(ERROR) << "Request to " << host_ << " failed: " << reqTry.exception().what();
+                if (retry) {
+                    auto metaStatus = client_.getPartMeta(spaceId, partId);
+                    if (metaStatus.ok()) {
+                        std::vector<HostAddr> peers = metaStatus.value().peers_;
+                        CHECK_GT(peers.size(), 0U);
+                        std::random_shuffle(peers.begin(), peers.end());
+                        for (auto& host : peers) {
+                            if (host != host_) {
+                                LOG(INFO) << "retry failed request, " << partId << "@host: " << host_ << " -> " << host;
+                                host_ = host;
+                                return process(false);
+                            }
+                        }
+                    }
+                }
+                stats::Stats::addStatsValue(
+                    client_.stats_.get(), false, duration_.elapsedInUSec());
+                client_.invalidLeader(spaceId, partId);
+                return folly::makeFuture<StatusOr<Response>>(Status::Error(folly::stringPrintf(
+                    "RPC failure in StorageClient: %s", reqTry.exception().what().c_str())));
+            } else {
+                auto resp = std::move(reqTry).value();
+                auto& result = resp.get_result();
+                for (auto& code : result.get_failed_codes()) {
+                    if (code.get_code() == storage::cpp2::ErrorCode::E_LEADER_CHANGED) {
+                        auto* leader = code.get_leader();
+                        if (leader != nullptr && leader->get_ip() != 0 && leader->get_port() != 0) {
+                            client_.updateLeader(spaceId, code.get_part_id(),
+                                                 HostAddr(leader->get_ip(), leader->get_port()));
+                        } else {
+                            client_.invalidLeader(spaceId, code.get_part_id());
+                        }
+                    } else if (code.get_code() == storage::cpp2::ErrorCode::E_PART_NOT_FOUND ||
+                               code.get_code() == storage::cpp2::ErrorCode::E_SPACE_NOT_FOUND) {
+                        client_.invalidLeader(spaceId, code.get_part_id());
+                    }
+                }
+                stats::Stats::addStatsValue(
+                    client_.stats_.get(), result.get_failed_codes().empty(),duration_.elapsedInUSec());
+                return folly::makeFuture<StatusOr<Response>>(std::move(resp));
+            }
+        });
+    }
+private:
+    std::shared_ptr<storage::cpp2::StorageServiceAsyncClient>
+    getClient(HostAddr host) {
+        return client_.clientsMan_->client(
+            host, evb_, false, FLAGS_storage_client_timeout_ms);
+    }
+private:
+    time::Duration duration_;
+    StorageClient& client_;
+    HostAddr host_;
+    Request req_;
+    folly::EventBase* evb_{};
+};
+
+template <
+    class Request,
+    class Response = typename decltype(processOne(
+        *(storage::cpp2::StorageServiceAsyncClient*)(nullptr),
+        *(const Request*)(nullptr))
+    )::value_type
+>
+std::shared_ptr<StorageReqContext<Request, Response>>
+makeStorageReqContext(StorageClient& client, HostAddr host, Request req, folly::EventBase* evb) {
+    return std::make_shared<StorageReqContext<Request, Response>>(
+        client, host, std::forward<Request>(req), evb);
+}
 
 StorageClient::StorageClient(std::shared_ptr<folly::IOThreadPoolExecutor> threadPool,
                              meta::MetaClient *client,
@@ -54,15 +410,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::ExecResponse>> StorageClient::addVert
         req.set_parts(std::move(c.second));
     }
 
-    VLOG(3) << "requests size " << requests.size();
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client,
-           const cpp2::AddVerticesRequest& r) {
-            return client->future_addVertices(r); },
-        [](const std::pair<const PartitionID, std::vector<cpp2::Vertex>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process();
 }
 
 
@@ -89,15 +437,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::ExecResponse>> StorageClient::addEdge
         req.set_parts(std::move(c.second));
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client,
-           const cpp2::AddEdgesRequest& r) {
-            return client->future_addEdges(r); },
-        [](const std::pair<const PartitionID,
-                           std::vector<cpp2::Edge>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process();
 }
 
 
@@ -128,14 +468,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::QueryResponse>> StorageClient::getNei
         req.set_return_columns(returnCols);
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsRequest& r) {
-            return client->future_getBound(r); },
-        [](const std::pair<const PartitionID,
-                           std::vector<VertexID>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
 
 folly::SemiFuture<StorageRpcResponse<cpp2::GetNeighborsSampleResponse>> StorageClient::sampleNeighbors(
@@ -181,53 +514,8 @@ folly::SemiFuture<StorageRpcResponse<cpp2::GetNeighborsSampleResponse>> StorageC
         req.set_yields(yields);
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsSampleRequest& r) {
-            return client->future_getBoundSample(r); },
-        [](const std::pair<const PartitionID,
-            std::vector<graph::cpp2::RowValue>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
-
-folly::SemiFuture<StorageRpcResponse<cpp2::QueryStatsResponse>> StorageClient::neighborStats(
-        GraphSpaceID space,
-        std::vector<VertexID> vertices,
-        std::vector<EdgeType> edgeTypes,
-        std::string filter,
-        std::vector<cpp2::PropDef> returnCols,
-        folly::EventBase* evb) {
-    auto status = clusterIdsToHosts(space, vertices, [](const VertexID& v) { return v; });
-
-    if (!status.ok()) {
-        return folly::makeFuture<StorageRpcResponse<cpp2::QueryStatsResponse>>(
-            std::runtime_error(status.status().toString()));
-    }
-    auto& clusters = status.value();
-
-    std::unordered_map<HostAddr, cpp2::GetNeighborsRequest> requests;
-    for (auto& c : clusters) {
-        auto& host = c.first;
-        auto& req = requests[host];
-        req.set_space_id(space);
-        req.set_parts(std::move(c.second));
-        // Make edge type a negative number when query in-bound
-        req.set_edge_types(edgeTypes);
-        req.set_filter(filter);
-        req.set_return_columns(returnCols);
-    }
-
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client, const cpp2::GetNeighborsRequest& r) {
-            return client->future_boundStats(r); },
-        [](const std::pair<const PartitionID,
-                           std::vector<VertexID>>& p) {
-            return p.first;
-        });
-}
-
 
 folly::SemiFuture<StorageRpcResponse<cpp2::QueryResponse>> StorageClient::getVertexProps(
         GraphSpaceID space,
@@ -251,15 +539,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::QueryResponse>> StorageClient::getVer
         req.set_return_columns(returnCols);
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client,
-           const cpp2::VertexPropRequest& r) {
-            return client->future_getProps(r); },
-        [](const std::pair<const PartitionID,
-                           std::vector<VertexID>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
 
 
@@ -290,14 +570,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::EdgePropResponse>> StorageClient::get
         req.set_return_columns(returnCols);
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client,
-           const cpp2::EdgePropRequest& r) {
-            return client->future_getEdgeProps(r); },
-        [](const std::pair<const PartitionID, std::vector<cpp2::EdgeKey>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
 
 folly::SemiFuture<StorageRpcResponse<cpp2::ExecResponse>> StorageClient::deleteEdges(
@@ -321,15 +594,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::ExecResponse>> StorageClient::deleteE
         req.set_parts(std::move(c.second));
     }
 
-    return collectResponse(
-        evb, std::move(requests),
-        [](cpp2::StorageServiceAsyncClient* client,
-           const cpp2::DeleteEdgesRequest& r) {
-            return client->future_deleteEdges(r); },
-        [](const std::pair<const PartitionID,
-                           std::vector<cpp2::EdgeKey>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process();
 }
 
 
@@ -353,16 +618,7 @@ folly::SemiFuture<StorageRpcResponse<cpp2::ExecResponse>> StorageClient::deleteV
         req.set_parts(std::move(c.second));
     }
 
-    return collectResponse(
-        evb,
-        std::move(requests),
-        [] (cpp2::StorageServiceAsyncClient* client,
-            const cpp2::DeleteVerticesRequest& r) {
-            return client->future_deleteVertices(r);
-        },
-        [](const std::pair<const PartitionID, std::vector<VertexID>>& p) {
-            return p.first;
-        });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process();
 }
 
 
@@ -374,7 +630,6 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateVert
         std::vector<std::string> returnCols,
         bool insertable,
         folly::EventBase* evb) {
-    std::pair<HostAddr, cpp2::UpdateVertexRequest> request;
 
     auto status = partId(space, vertexId);
     if (!status.ok()) {
@@ -389,7 +644,6 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateVert
     auto partMeta = metaStatus.value();
     CHECK_GT(partMeta.peers_.size(), 0U);
     const auto& host = this->leader(partMeta);
-    request.first = std::move(host);
     cpp2::UpdateVertexRequest req;
     req.set_space_id(space);
     req.set_vertex_id(vertexId);
@@ -398,14 +652,8 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateVert
     req.set_update_items(std::move(updateItems));
     req.set_return_columns(returnCols);
     req.set_insertable(insertable);
-    request.second = std::move(req);
 
-    return getResponse(
-        evb, std::move(request),
-        [] (cpp2::StorageServiceAsyncClient* client,
-           const cpp2::UpdateVertexRequest& r) {
-            return client->future_updateVertex(r);
-        });
+    return makeStorageReqContext(*this, host, std::move(req), evb)->process();
 }
 
 
@@ -417,7 +665,6 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateEdge
         std::vector<std::string> returnCols,
         bool insertable,
         folly::EventBase* evb) {
-    std::pair<HostAddr, cpp2::UpdateEdgeRequest> request;
     auto status = partId(space, edgeKey.get_src());
     if (!status.ok()) {
         return folly::makeFuture<StatusOr<storage::cpp2::UpdateResponse>>(status.status());
@@ -431,7 +678,6 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateEdge
     auto partMeta = metaStatus.value();
     CHECK_GT(partMeta.peers_.size(), 0U);
     const auto& host = this->leader(partMeta);
-    request.first = std::move(host);
     cpp2::UpdateEdgeRequest req;
     req.set_space_id(space);
     req.set_edge_key(edgeKey);
@@ -440,14 +686,8 @@ folly::Future<StatusOr<storage::cpp2::UpdateResponse>> StorageClient::updateEdge
     req.set_update_items(std::move(updateItems));
     req.set_return_columns(returnCols);
     req.set_insertable(insertable);
-    request.second = std::move(req);
 
-    return getResponse(
-        evb, std::move(request),
-        [] (cpp2::StorageServiceAsyncClient* client,
-           const cpp2::UpdateEdgeRequest& r) {
-            return client->future_updateEdge(r);
-        });
+    return makeStorageReqContext(*this, host, std::move(req), evb)->process();
 }
 
 
@@ -455,7 +695,6 @@ folly::Future<StatusOr<cpp2::GetUUIDResp>> StorageClient::getUUID(
         GraphSpaceID space,
         const std::string& name,
         folly::EventBase* evb) {
-    std::pair<HostAddr, cpp2::GetUUIDReq> request;
     std::hash<std::string> hashFunc;
     auto hashValue = hashFunc(name);
     auto status = partId(space, hashValue);
@@ -470,22 +709,14 @@ folly::Future<StatusOr<cpp2::GetUUIDResp>> StorageClient::getUUID(
     }
     auto partMeta = metaStatus.value();
     CHECK_GT(partMeta.peers_.size(), 0U);
-    const auto& leader = this->leader(partMeta);
-    request.first = leader;
+    const auto& host = this->leader(partMeta);
 
     cpp2::GetUUIDReq req;
     req.set_space_id(space);
     req.set_part_id(part);
     req.set_name(name);
-    request.second = std::move(req);
 
-    return getResponse(
-        evb,
-        std::move(request),
-        [] (cpp2::StorageServiceAsyncClient* client,
-            const cpp2::GetUUIDReq& r) {
-            return client->future_getUUID(r);
-    });
+    return makeStorageReqContext(*this, host, std::move(req), evb)->process(true);
 }
 
 StatusOr<PartitionID> StorageClient::partId(GraphSpaceID spaceId, int64_t id) const {
@@ -522,14 +753,7 @@ StorageClient::put(GraphSpaceID space,
         req.set_parts(std::move(c.second));
     }
 
-    return collectResponse(evb, std::move(requests),
-                           [](cpp2::StorageServiceAsyncClient* client,
-                              const cpp2::PutRequest& r) {
-                               return client->future_put(r); },
-                           [](const std::pair<const PartitionID,
-                                              std::vector<::nebula::cpp2::Pair>>& p) {
-                               return p.first;
-                           });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process();
 }
 
 folly::SemiFuture<StorageRpcResponse<storage::cpp2::GeneralResponse>>
@@ -555,14 +779,7 @@ StorageClient::get(GraphSpaceID space,
         req.set_return_partly(returnPartly);
     }
 
-    return collectResponse(evb, std::move(requests),
-                           [](cpp2::StorageServiceAsyncClient* client,
-                              const cpp2::GetRequest& r) {
-                               return client->future_get(r); },
-                           [](const std::pair<const PartitionID,
-                                               std::vector<std::string>>& p) {
-                               return p.first;
-                           });
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
 
 folly::SemiFuture<StorageRpcResponse<storage::cpp2::LookUpIndexResp>>
@@ -589,17 +806,11 @@ StorageClient::lookUpIndex(GraphSpaceID space,
         req.set_return_columns(returnCols);
         req.set_is_edge(isEdge);
     }
-    return collectResponse(evb, std::move(requests),
-                           [](cpp2::StorageServiceAsyncClient* client,
-                              const cpp2::LookUpIndexRequest& r) {
-                              return client->future_lookUpIndex(r);
-                           },
-                           [](const PartitionID& part) {
-                               return part;
-                           });
+
+    return makeStorageReqsContext(*this, std::move(requests), evb)->process(true);
 }
 
-folly::SemiFuture<StatusOr<storage::cpp2::ScanVertexResponse>>
+folly::Future<StatusOr<storage::cpp2::ScanVertexResponse>>
 StorageClient::ScanVertex(GraphSpaceID space,
                           PartitionID partId,
                           std::string cursor,
@@ -609,7 +820,6 @@ StorageClient::ScanVertex(GraphSpaceID space,
                           int64_t start_time,
                           int64_t end_time,
                           folly::EventBase *evb) {
-    std::pair<HostAddr, cpp2::ScanVertexRequest> request;
     auto metaStatus = getPartMeta(space, partId);
     if (!metaStatus.ok()) {
         return folly::makeFuture<StatusOr<storage::cpp2::ScanVertexResponse>>(metaStatus.status());
@@ -618,7 +828,6 @@ StorageClient::ScanVertex(GraphSpaceID space,
     CHECK_GT(partMeta.peers_.size(), 0U);
     const auto& host = this->leader(partMeta);
     VLOG(1) << "ScanVertex partId " << partId << " @" << host;
-    request.first = std::move(host);
     cpp2::ScanVertexRequest req;
     req.set_space_id(space);
     req.set_part_id(partId);
@@ -628,14 +837,8 @@ StorageClient::ScanVertex(GraphSpaceID space,
     req.set_limit(limit);
     req.set_start_time(start_time);
     req.set_end_time(end_time);
-    request.second = std::move(req);
 
-    return getResponse(
-        evb, std::move(request),
-        [] (cpp2::StorageServiceAsyncClient* client,
-            const cpp2::ScanVertexRequest& r) {
-            return client->future_scanVertex(r);
-        });
+    return makeStorageReqContext(*this, host, std::move(req), evb)->process(true);
 }
 
 }   // namespace storage

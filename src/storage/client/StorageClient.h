@@ -139,14 +139,6 @@ public:
         std::vector<storage::cpp2::YieldColumn> yields,
         folly::EventBase* evb = nullptr);
 
-    folly::SemiFuture<StorageRpcResponse<storage::cpp2::QueryStatsResponse>> neighborStats(
-        GraphSpaceID space,
-        std::vector<VertexID> vertices,
-        std::vector<EdgeType> edgeType,
-        std::string filter,
-        std::vector<storage::cpp2::PropDef> returnCols,
-        folly::EventBase* evb = nullptr);
-
     folly::SemiFuture<StorageRpcResponse<storage::cpp2::QueryResponse>> getVertexProps(
         GraphSpaceID space,
         std::vector<VertexID> vertices,
@@ -200,7 +192,7 @@ public:
         bool isEdge,
         folly::EventBase *evb = nullptr);
 
-    folly::SemiFuture<StatusOr<storage::cpp2::ScanVertexResponse>> ScanVertex(
+    folly::Future<StatusOr<storage::cpp2::ScanVertexResponse>> ScanVertex(
             GraphSpaceID space,
             PartitionID partId,
             std::string cursor,
@@ -248,32 +240,6 @@ protected:
             leaders_.erase(it);
         }
     }
-
-    template<class Request,
-             class RemoteFunc,
-             class GetPartIDFunc,
-             class Response =
-                typename std::result_of<
-                    RemoteFunc(storage::cpp2::StorageServiceAsyncClient*, const Request&)
-                >::type::value_type
-            >
-    folly::SemiFuture<StorageRpcResponse<Response>> collectResponse(
-        folly::EventBase* evb,
-        std::unordered_map<HostAddr, Request> requests,
-        RemoteFunc&& remoteFunc,
-        GetPartIDFunc getPartIDFunc);
-
-    template<class Request,
-             class RemoteFunc,
-             class Response =
-                typename std::result_of<
-                    RemoteFunc(cpp2::StorageServiceAsyncClient* client, const Request&)
-                >::type::value_type
-            >
-    folly::Future<StatusOr<Response>> getResponse(
-        folly::EventBase* evb,
-        std::pair<HostAddr, Request> request,
-        RemoteFunc remoteFunc);
 
     // Cluster given ids into the host they belong to
     // The method returns a map
@@ -363,6 +329,12 @@ protected:
     }
 
 private:
+    template<class Request, class Response>
+    friend struct StorageReqsContext;
+
+    template<class Request, class Response>
+    friend struct StorageReqContext;
+
     std::shared_ptr<folly::IOThreadPoolExecutor> ioThreadPool_;
     meta::MetaClient *client_{nullptr};
     std::unique_ptr<thrift::ThriftClientManager<
@@ -375,7 +347,5 @@ private:
 };
 }   // namespace storage
 }   // namespace nebula
-
-#include "storage/client/StorageClient.inl"
 
 #endif  // STORAGE_CLIENT_STORAGECLIENT_H_
