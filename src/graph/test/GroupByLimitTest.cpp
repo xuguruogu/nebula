@@ -299,49 +299,31 @@ TEST_F(GroupByLimitTest, GroupByTest) {
     {
         cpp2::ExecutionResponse resp;
         auto &player = players_["Marco Belinelli"];
-        auto *fmt = "GO FROM %ld OVER serve "
-                    "YIELD $$.team.name AS name, "
-                    "serve._dst AS id, "
-                    "serve.start_year AS start_year, "
-                    "serve.end_year AS end_year"
-                    "| GROUP BY $-.start_year "
-                    "YIELD COUNT($-.id) as cnt, "
-                    "collect_set($-.end_year) AS end_years "
-                    "| YIELD $-.cnt as cnt, "
-                    "concat_ws(',', $-.end_years) AS end_years";
+        auto *fmt = "GO FROM %ld OVER like "
+                    "YIELD $$.player.name AS name "
+                    "| YIELD collect_set($-.name) as names"
+                    "| YIELD concat_ws(',', $-.names) AS names";
         auto query = folly::stringPrintf(fmt, player.vid());
         auto code = client_->execute(query, resp);
         ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
-        std::vector<std::tuple<uint64_t, std::string>> expected = {
-            {2, "2018,2019"},
-            {1, "2018"},
-            {1, "2017"},
-            {1, "2010"},
-            {1, "2009"},
-            {1, "2013"},
-            {1, "2016"},
+        std::vector<std::tuple<std::string>> expected = {
+            {"Tim Duncan,Danny Green,Tony Parker"},
         };
         ASSERT_TRUE(verifyResult(resp, expected));
     }
     // collect_list
     {
         cpp2::ExecutionResponse resp;
-        auto *fmt = "GO FROM %ld,%ld OVER serve "
-                    "YIELD $$.team.name AS name"
-                    "| GROUP BY $-.name "
-                    "YIELD COUNT($-.name) as cnt, "
-                    "collect_list($-.name) AS names "
-                    "| YIELD $-.cnt as cnt, "
-                    "concat_ws(',', $-.names) AS names";
-        auto query = folly::stringPrintf(
-            fmt,
-            players_["Tim Duncan"].vid(),
-            players_["Tony Parker"].vid());
+        auto &player = players_["Marco Belinelli"];
+        auto *fmt = "GO FROM %ld OVER like "
+                    "YIELD $$.player.name AS name "
+                    "| YIELD collect_list($-.name) as names"
+                    "| YIELD concat_ws(',', $-.names) AS names";
+        auto query = folly::stringPrintf(fmt, player.vid());
         auto code = client_->execute(query, resp);
         ASSERT_EQ(cpp2::ErrorCode::SUCCEEDED, code);
-        std::vector<std::tuple<uint64_t, std::string>> expected = {
-            {2, "Spurs,Spurs"},
-            {1, "Hornets"},
+        std::vector<std::tuple<std::string>> expected = {
+            {"Danny Green,Tony Parker,Tim Duncan"},
         };
         ASSERT_TRUE(verifyResult(resp, expected));
     }
