@@ -102,7 +102,7 @@ kvstore::ResultCode QueryVertexPropsProcessor::collectVertexProps(
                             std::vector<cpp2::TagData> &tds) {
     auto prefix = NebulaKeyUtils::vertexPrefix(partId, vId);
     std::unique_ptr<kvstore::KVIterator> iter;
-    auto ret = this->kvstore_->prefix(spaceId_, partId, prefix, &iter);
+    auto ret = this->kvstore_->prefix(spaceId_, partId, prefix, &iter, false);
     if (ret != kvstore::ResultCode::SUCCEEDED) {
         return ret;
     }

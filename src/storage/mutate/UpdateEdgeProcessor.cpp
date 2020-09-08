@@ -103,7 +103,7 @@ kvstore::ResultCode UpdateEdgeProcessor::collectVertexProps(
                             const std::vector<PropContext>& props) {
     auto prefix = NebulaKeyUtils::vertexPrefix(partId, vId, tagId);
     std::unique_ptr<kvstore::KVIterator> iter;
-    auto ret = this->kvstore_->prefix(this->spaceId_, partId, prefix, &iter);
+    auto ret = this->kvstore_->prefix(this->spaceId_, partId, prefix, &iter, false);
     if (ret != kvstore::ResultCode::SUCCEEDED) {
         VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                 << ", spaceId " << this->spaceId_;
@@ -156,7 +156,7 @@ kvstore::ResultCode UpdateEdgeProcessor::collectEdgesProps(
     auto prefix = NebulaKeyUtils::prefix(partId, edgeKey.src, edgeKey.edge_type,
                                          edgeKey.ranking, edgeKey.dst);
     std::unique_ptr<kvstore::KVIterator> iter;
-    auto ret = kvstore_->prefix(this->spaceId_, partId, prefix, &iter);
+    auto ret = kvstore_->prefix(this->spaceId_, partId, prefix, &iter, false);
     if (ret != kvstore::ResultCode::SUCCEEDED) {
         VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                 << ", spaceId " << this->spaceId_;

@@ -93,7 +93,8 @@ public:
                              PartitionID  partId,
                              const std::string& start,
                              const std::string& end,
-                             std::unique_ptr<KVIterator>* iter) = 0;
+                             std::unique_ptr<KVIterator>* iter,
+                             bool total_order_seek = true) = 0;
 
     // Since the `range' interface will hold references to its 3rd & 4th parameter, in `iter',
     // thus the arguments must outlive `iter'.
@@ -102,33 +103,38 @@ public:
                              PartitionID  partId,
                              std::string&& start,
                              std::string&& end,
-                             std::unique_ptr<KVIterator>* iter) = delete;
+                             std::unique_ptr<KVIterator>* iter,
+                             bool total_order_seek = true) = delete;
 
     // Get all results with prefix.
     virtual ResultCode prefix(GraphSpaceID spaceId,
                               PartitionID  partId,
                               const std::string& prefix,
-                              std::unique_ptr<KVIterator>* iter) = 0;
+                              std::unique_ptr<KVIterator>* iter,
+                              bool total_order_seek = true) = 0;
 
     // To forbid to pass rvalue via the `prefix' parameter.
     virtual ResultCode prefix(GraphSpaceID spaceId,
                               PartitionID  partId,
                               std::string&& prefix,
-                              std::unique_ptr<KVIterator>* iter) = delete;
+                              std::unique_ptr<KVIterator>* iter,
+                              bool total_order_seek = true) = delete;
 
     // Get all results with prefix starting from start
     virtual ResultCode rangeWithPrefix(GraphSpaceID spaceId,
                                        PartitionID  partId,
                                        const std::string& start,
                                        const std::string& prefix,
-                                       std::unique_ptr<KVIterator>* iter) = 0;
+                                       std::unique_ptr<KVIterator>* iter,
+                                       bool total_order_seek = true) = 0;
 
     // To forbid to pass rvalue via the `rangeWithPrefix' parameter.
     virtual ResultCode rangeWithPrefix(GraphSpaceID spaceId,
                                        PartitionID  partId,
                                        std::string&& start,
                                        std::string&& prefix,
-                                       std::unique_ptr<KVIterator>* iter) = delete;
+                                       std::unique_ptr<KVIterator>* iter,
+                                       bool total_order_seek = true) = delete;
 
     virtual ResultCode sync(GraphSpaceID spaceId,
                             PartitionID partId) = 0;

@@ -98,23 +98,26 @@ kvstore::ResultCode BaseProcessor<RESP>::doRange(GraphSpaceID spaceId,
                                                  PartitionID partId,
                                                  const std::string& start,
                                                  const std::string& end,
-                                                 std::unique_ptr<kvstore::KVIterator>* iter) {
-    return kvstore_->range(spaceId, partId, start, end, iter);
+                                                 std::unique_ptr<kvstore::KVIterator>* iter,
+                                                 bool total_order_seek) {
+    return kvstore_->range(spaceId, partId, start, end, iter, total_order_seek);
 }
 
 template<typename RESP>
 kvstore::ResultCode BaseProcessor<RESP>::doPrefix(GraphSpaceID spaceId,
                                                   PartitionID partId,
                                                   const std::string& prefix,
-                                                  std::unique_ptr<kvstore::KVIterator>* iter) {
-    return kvstore_->prefix(spaceId, partId, prefix, iter);
+                                                  std::unique_ptr<kvstore::KVIterator>* iter,
+                                                  bool total_order_seek) {
+    return kvstore_->prefix(spaceId, partId, prefix, iter, total_order_seek);
 }
 
 template<typename RESP>
 kvstore::ResultCode BaseProcessor<RESP>::doRangeWithPrefix(
         GraphSpaceID spaceId, PartitionID partId, const std::string& start,
-        const std::string& prefix, std::unique_ptr<kvstore::KVIterator>* iter) {
-    return kvstore_->rangeWithPrefix(spaceId, partId, start, prefix, iter);
+        const std::string& prefix, std::unique_ptr<kvstore::KVIterator>* iter,
+        bool total_order_seek) {
+    return kvstore_->rangeWithPrefix(spaceId, partId, start, prefix, iter, total_order_seek);
 }
 
 template <typename RESP>

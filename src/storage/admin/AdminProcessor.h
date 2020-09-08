@@ -124,12 +124,6 @@ public:
     void process(const cpp2::AddPartReq& req) {
         auto spaceId = req.get_space_id();
         auto partId = req.get_part_id();
-        if (FLAGS_store_type != "nebula") {
-            this->pushResultCode(cpp2::ErrorCode::E_INVALID_STORE, partId);
-            onFinished();
-            return;
-        }
-
         LOG(INFO) << "Receive add part for space "
                   << req.get_space_id() << ", part " << partId;
         auto* store = static_cast<kvstore::NebulaStore*>(kvstore_);
@@ -161,11 +155,6 @@ public:
     void process(const cpp2::RemovePartReq& req) {
         auto spaceId = req.get_space_id();
         auto partId = req.get_part_id();
-        if (FLAGS_store_type != "nebula") {
-            this->pushResultCode(cpp2::ErrorCode::E_INVALID_STORE, partId);
-            onFinished();
-            return;
-        }
         auto* store = static_cast<kvstore::NebulaStore*>(kvstore_);
         store->removePart(spaceId, partId);
         onFinished();

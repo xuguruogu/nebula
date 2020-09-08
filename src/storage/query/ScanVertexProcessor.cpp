@@ -13,6 +13,7 @@
 #include "dataman/RowWriter.h"
 #include "meta/NebulaSchemaProvider.h"
 #include "storage/StorageFlags.h"
+#include "kvstore/RocksEngineConfig.h"
 
 
 DECLARE_int64(max_scan_block_size);
@@ -52,7 +53,12 @@ void ScanVertexProcessor::process(const cpp2::ScanVertexRequest& req) {
 
     executor_->add([this] () mutable {
         std::unique_ptr<kvstore::KVIterator> iter;
-        auto kvRet = doRangeWithPrefix(spaceId_, partId_, start_, prefix_, &iter);
+        bool total_order_seek = false;
+        if (FLAGS_enable_rocksdb_prefix_filtering &&
+            FLAGS_rocksdb_filtering_prefix_length <= prefix_.length()) {
+            total_order_seek = true;
+        }
+        auto kvRet = doRangeWithPrefix(spaceId_, partId_, start_, prefix_, &iter, total_order_seek);
         if (kvRet != kvstore::ResultCode::SUCCEEDED) {
             LOG(ERROR) << "scan vertex doRangeWithPrefix error."
                        << " ret: " << static_cast<int>(kvRet)

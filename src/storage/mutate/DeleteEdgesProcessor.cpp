@@ -41,7 +41,7 @@ void DeleteEdgesProcessor::process(const cpp2::DeleteEdgesRequest& req) {
                                                    edgeKey.dst,
                                                    std::numeric_limits<int64_t>::max());
                 std::unique_ptr<kvstore::KVIterator> iter;
-                auto ret = this->kvstore_->range(spaceId, partId, start, end, &iter);
+                auto ret = this->kvstore_->range(spaceId, partId, start, end, &iter, false);
                 if (ret != kvstore::ResultCode::SUCCEEDED) {
                     VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                             << ", spaceID " << spaceId;
@@ -86,7 +86,7 @@ DeleteEdgesProcessor::deleteEdges(GraphSpaceID spaceId,
         auto dstId = edge.dst;
         auto prefix = NebulaKeyUtils::edgePrefix(partId, srcId, type, rank, dstId);
         std::unique_ptr<kvstore::KVIterator> iter;
-        auto ret = this->kvstore_->prefix(spaceId, partId, prefix, &iter);
+        auto ret = this->kvstore_->prefix(spaceId, partId, prefix, &iter, false);
         if (ret != kvstore::ResultCode::SUCCEEDED) {
             VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                     << ", spaceId " << spaceId;

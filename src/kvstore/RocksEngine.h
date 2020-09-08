@@ -125,14 +125,17 @@ public:
 
     ResultCode range(const std::string& start,
                      const std::string& end,
-                     std::unique_ptr<KVIterator>* iter) override;
+                     std::unique_ptr<KVIterator>* iter,
+                     bool total_order_seek = true) override;
 
     ResultCode prefix(const std::string& prefix,
-                      std::unique_ptr<KVIterator>* iter) override;
+                      std::unique_ptr<KVIterator>* iter,
+                      bool total_order_seek = true) override;
 
     ResultCode rangeWithPrefix(const std::string& start,
                                const std::string& prefix,
-                               std::unique_ptr<KVIterator>* iter) override;
+                               std::unique_ptr<KVIterator>* iter,
+                               bool total_order_seek = true) override;
 
     /*********************
      * Data modification

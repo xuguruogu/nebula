@@ -480,7 +480,6 @@ macro(nebula_add_library name type)
         storage_thrift_headers
         meta_thrift_headers
         raftex_thrift_headers
-        hbase_thrift_headers
         parser_target
     )
 endmacro()
@@ -490,8 +489,6 @@ include_directories(AFTER src/common)
 include_directories(AFTER src/interface)
 include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR}/src/interface)
-include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR}/src/kvstore/plugins)
-include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR}/src/kvstore/plugins/hbase)
 include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR}/src/parser)
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L ${NEBULA_THIRDPARTY_ROOT}/lib")

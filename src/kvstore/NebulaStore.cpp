@@ -431,7 +431,8 @@ ResultCode NebulaStore::range(GraphSpaceID spaceId,
                               PartitionID partId,
                               const std::string& start,
                               const std::string& end,
-                              std::unique_ptr<KVIterator>* iter) {
+                              std::unique_ptr<KVIterator>* iter,
+                              bool total_order_seek) {
     auto ret = part(spaceId, partId);
     if (!ok(ret)) {
         return error(ret);
@@ -440,14 +441,15 @@ ResultCode NebulaStore::range(GraphSpaceID spaceId,
     if (!checkLeader(part)) {
         return ResultCode::ERR_LEADER_CHANGED;
     }
-    return part->engine()->range(start, end, iter);
+    return part->engine()->range(start, end, iter, total_order_seek);
 }
 
 
 ResultCode NebulaStore::prefix(GraphSpaceID spaceId,
                                PartitionID partId,
                                const std::string& prefix,
-                               std::unique_ptr<KVIterator>* iter) {
+                               std::unique_ptr<KVIterator>* iter,
+                               bool total_order_seek) {
     auto ret = part(spaceId, partId);
     if (!ok(ret)) {
         return error(ret);
@@ -456,7 +458,7 @@ ResultCode NebulaStore::prefix(GraphSpaceID spaceId,
     if (!checkLeader(part)) {
         return ResultCode::ERR_LEADER_CHANGED;
     }
-    return part->engine()->prefix(prefix, iter);
+    return part->engine()->prefix(prefix, iter, total_order_seek);
 }
 
 
@@ -464,7 +466,8 @@ ResultCode NebulaStore::rangeWithPrefix(GraphSpaceID spaceId,
                                         PartitionID  partId,
                                         const std::string& start,
                                         const std::string& prefix,
-                                        std::unique_ptr<KVIterator>* iter) {
+                                        std::unique_ptr<KVIterator>* iter,
+                                        bool total_order_seek) {
     auto ret = part(spaceId, partId);
     if (!ok(ret)) {
         return error(ret);
@@ -473,7 +476,7 @@ ResultCode NebulaStore::rangeWithPrefix(GraphSpaceID spaceId,
     if (!checkLeader(part)) {
         return ResultCode::ERR_LEADER_CHANGED;
     }
-    return part->engine()->rangeWithPrefix(start, prefix, iter);
+    return part->engine()->rangeWithPrefix(start, prefix, iter, total_order_seek);
 }
 
 

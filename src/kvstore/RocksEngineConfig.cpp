@@ -16,6 +16,7 @@
 #include "rocksdb/concurrent_task_limiter.h"
 #include "rocksdb/rate_limiter.h"
 #include "base/Configuration.h"
+#include "utils/NebulaKeyUtils.h"
 
 // [WAL]
 DEFINE_bool(rocksdb_disable_wal,
@@ -71,8 +72,39 @@ DEFINE_int32(num_compaction_threads, 0,
 DEFINE_int32(rate_limit, 0,
             "write limit in bytes per sec. The unit is MB. 0 means unlimited.");
 
+DEFINE_bool(enable_rocksdb_prefix_filtering, true,
+            "Whether or not to enable rocksdb's prefix bloom filter.");
+DEFINE_bool(enable_rocksdb_whole_key_filtering, false,
+            "Whether or not to enable the whole key filtering.");
+DEFINE_uint32(rocksdb_filtering_prefix_length, 16,
+            "The prefix length, default value is 16 bytes(PartitionID+VertexID+type).");
+
 namespace nebula {
 namespace kvstore {
+
+class GraphPrefixTransform : public rocksdb::SliceTransform {
+private:
+    size_t prefixLen_;
+    std::string name_;
+
+public:
+    explicit GraphPrefixTransform(size_t prefixLen)
+        : prefixLen_(prefixLen),
+        name_("nebula.GraphPrefix." + std::to_string(prefixLen_)) {}
+
+    const char* Name() const override { return name_.c_str(); }
+
+    rocksdb::Slice Transform(const rocksdb::Slice& src) const override {
+        return {src.data(), prefixLen_};
+    }
+
+    bool InDomain(const rocksdb::Slice& src) const override {
+        auto key = folly::StringPiece(src.data(), src.size());
+        return (src.size() == prefixLen_ && NebulaKeyUtils::isDataKey(key))
+               || NebulaKeyUtils::isEdge(key)
+               || NebulaKeyUtils::isVertex(key);
+    }
+};
 
 static rocksdb::Status initRocksdbCompression(rocksdb::Options &baseOpts) {
     static std::unordered_map<std::string, rocksdb::CompressionType> m = {
@@ -194,6 +226,11 @@ rocksdb::Status initRocksdbOptions(rocksdb::Options &baseOpts) {
         bbtOpts.pin_l0_filter_and_index_blocks_in_cache =
             baseOpts.compaction_style == rocksdb::CompactionStyle::kCompactionStyleLevel;
     }
+    if (FLAGS_enable_rocksdb_prefix_filtering) {
+        baseOpts.prefix_extractor.reset(
+                new GraphPrefixTransform(FLAGS_rocksdb_filtering_prefix_length));
+    }
+    bbtOpts.whole_key_filtering = FLAGS_enable_rocksdb_whole_key_filtering;
     baseOpts.table_factory.reset(NewBlockBasedTableFactory(bbtOpts));
     baseOpts.create_if_missing = true;
     return s;

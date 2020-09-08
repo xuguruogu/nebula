@@ -33,7 +33,7 @@ void DeleteVerticesProcessor::process(const cpp2::DeleteVerticesRequest& req) {
             for (auto v = vertices.begin(); v != vertices.end(); v++) {
                 auto prefix = NebulaKeyUtils::vertexPrefix(part, *v);
                 std::unique_ptr<kvstore::KVIterator> iter;
-                auto ret = this->kvstore_->prefix(spaceId, part, prefix, &iter);
+                auto ret = this->kvstore_->prefix(spaceId, part, prefix, &iter, false);
                 if (ret != kvstore::ResultCode::SUCCEEDED) {
                     VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                             << ", spaceID " << spaceId;
@@ -86,7 +86,7 @@ DeleteVerticesProcessor::deleteVertices(GraphSpaceID spaceId,
     for (auto& vertex : vertices) {
         auto prefix = NebulaKeyUtils::vertexPrefix(partId, vertex);
         std::unique_ptr<kvstore::KVIterator> iter;
-        auto ret = this->kvstore_->prefix(spaceId, partId, prefix, &iter);
+        auto ret = this->kvstore_->prefix(spaceId, partId, prefix, &iter, false);
         if (ret != kvstore::ResultCode::SUCCEEDED) {
             VLOG(3) << "Error! ret = " << static_cast<int32_t>(ret)
                     << ", spaceId " << spaceId;

@@ -9,8 +9,6 @@
 
 #include "base/Base.h"
 
-DECLARE_string(store_type);
-
 DECLARE_int32(waiting_catch_up_retry_times);
 
 DECLARE_int32(waiting_catch_up_interval_in_secs);

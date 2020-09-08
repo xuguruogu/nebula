@@ -190,8 +190,10 @@ std::vector<Status> RocksEngine::multiGet(const std::vector<std::string>& keys,
 
 ResultCode RocksEngine::range(const std::string& start,
                               const std::string& end,
-                              std::unique_ptr<KVIterator>* storageIter) {
+                              std::unique_ptr<KVIterator>* storageIter,
+                              bool total_order_seek) {
     rocksdb::ReadOptions options;
+    options.total_order_seek = total_order_seek;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(start));
@@ -202,8 +204,10 @@ ResultCode RocksEngine::range(const std::string& start,
 
 
 ResultCode RocksEngine::prefix(const std::string& prefix,
-                               std::unique_ptr<KVIterator>* storageIter) {
+                               std::unique_ptr<KVIterator>* storageIter,
+                               bool total_order_seek) {
     rocksdb::ReadOptions options;
+    options.total_order_seek = total_order_seek;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(prefix));
@@ -215,8 +219,10 @@ ResultCode RocksEngine::prefix(const std::string& prefix,
 
 ResultCode RocksEngine::rangeWithPrefix(const std::string& start,
                                         const std::string& prefix,
-                                        std::unique_ptr<KVIterator>* storageIter) {
+                                        std::unique_ptr<KVIterator>* storageIter,
+                                        bool total_order_seek) {
     rocksdb::ReadOptions options;
+    options.total_order_seek = total_order_seek;
     rocksdb::Iterator* iter = db_->NewIterator(options);
     if (iter) {
         iter->Seek(rocksdb::Slice(start));

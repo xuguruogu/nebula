@@ -22,7 +22,7 @@ kvstore::ResultCode QueryEdgePropsProcessor::collectEdgesProps(
     auto prefix = NebulaKeyUtils::prefix(partId, edgeKey.src, edgeKey.edge_type,
                                          edgeKey.ranking, edgeKey.dst);
     std::unique_ptr<kvstore::KVIterator> iter;
-    auto ret = kvstore_->prefix(spaceId_, partId, prefix, &iter);
+    auto ret = kvstore_->prefix(spaceId_, partId, prefix, &iter, false);
     if (ret != kvstore::ResultCode::SUCCEEDED) {
         return ret;
     }

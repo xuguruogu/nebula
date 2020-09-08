@@ -48,22 +48,15 @@ std::unique_ptr<kvstore::KVStore> StorageServer::getStoreInstance() {
                                                 metaClient_.get());
     options.cffBuilder_ = std::make_unique<StorageCompactionFilterFactoryBuilder>(schemaMan_.get(),
                                                                                   indexMan_.get());
-    if (FLAGS_store_type == "nebula") {
-        auto nbStore = std::make_unique<kvstore::NebulaStore>(std::move(options),
-                                                              ioThreadPool_,
-                                                              localHost_,
-                                                              workers_);
-        if (!(nbStore->init())) {
-            LOG(ERROR) << "nebula store init failed";
-            return nullptr;
-        }
-        return nbStore;
-    } else if (FLAGS_store_type == "hbase") {
-        LOG(FATAL) << "HBase store has not been implemented";
-    } else {
-        LOG(FATAL) << "Unknown store type \"" << FLAGS_store_type << "\"";
+    auto nbStore = std::make_unique<kvstore::NebulaStore>(std::move(options),
+                                                          ioThreadPool_,
+                                                          localHost_,
+                                                          workers_);
+    if (!(nbStore->init())) {
+        LOG(ERROR) << "nebula store init failed";
+        return nullptr;
     }
-    return nullptr;
+    return nbStore;
 }
 
 bool StorageServer::initWebService() {
