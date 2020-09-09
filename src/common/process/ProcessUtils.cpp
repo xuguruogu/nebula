@@ -147,7 +147,7 @@ pid_t ProcessUtils::maxPid() {
 
 struct BgRun {
     enum {
-        NumItems = 10,
+        NumItems = 256,
         LineSize = 4096,
     };
 
@@ -320,8 +320,8 @@ void ProcessUtils::bgRunCommand() {
         }
 
         signal(SIGCHLD, [] (int) {
-            while (true) {
-                pid_t tPId = waitpid(-1, NULL, WNOHANG);
+            pid_t tPId;
+            while ((tPId=waitpid(-1, NULL, WNOHANG)) > 0) {
                 LOG(INFO) << "SIGCHLD: " << tPId;
                 if (tPId == pid) {
                     LOG(INFO) << "bg run exit.";
